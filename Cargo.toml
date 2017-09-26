@@ -1,0 +1,15 @@
+[package]
+name = "craft_server"
+version = "0.1.0"
+authors = ["twetzel59 <twetzel59@gmail.com>"]
+
+[lib]
+name = "craft_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "craft_server"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
