@@ -4,7 +4,7 @@ use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use client;
-use event::{Event, IdEvent, PositionEvent};
+use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
 /// The core server wrapper.
 ///
@@ -89,14 +89,21 @@ impl EventThread {
         thread::spawn(move || {
             loop {
                 if let Ok(ev) = self.rx.recv() {
-                    println!("{:?}", ev);
+                    //println!("{:?}", ev);
 
                     //for c in self.clients.lock().unwrap().iter() {
                     //    println!("{:?}", c.id());
                     //}
 
                     match ev.event {
-                        Event::Position(p) => self.handle_position_event(ev.sender, &p),
+                        Event::Position(p) => {
+                            println!("{:?}", p);
+                            self.handle_position_event(ev.sender, &p);
+                        },
+                        Event::Talk(t) => {
+                            println!("CHAT: {}", t.text.lines().next().unwrap_or(""));
+                            self.handle_talk_event(ev.sender, &t);
+                        },
                     }
                 }
             }
@@ -108,6 +115,12 @@ impl EventThread {
             if i.id() != sender {
                 i.send_position(sender, ev);
             }
+        }
+    }
+
+    fn handle_talk_event(&self, sender: client::Id, ev: &TalkEvent) {
+        for i in self.clients.lock().unwrap().iter_mut() {
+            i.send_talk(sender, ev);
         }
     }
 }

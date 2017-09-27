@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{Event, IdEvent, PositionEvent};
+use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -58,7 +58,7 @@ impl Client {
         self.id
     }
 
-    /// Send another client's position
+    /// Sends another client's position.
     pub fn send_position(&mut self, other_id: Id, ev: &PositionEvent) {
         //println!("should send {}'s position to: {}", another_id, self.id);
 
@@ -74,6 +74,15 @@ impl Client {
                           ev.ry.to_string());
 
         //print!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    /// Sends a chat message.
+    pub fn send_talk(&mut self, _other_id: Id, ev: &TalkEvent) {
+        let msg = format!("T,{}\n", ev.text);
+        //println!("will send: {}", msg);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.
         let _ = self.send_stream.write_all(msg.as_bytes());
@@ -153,8 +162,11 @@ impl ClientThread {
         assert!(msg.len() > 1);
         //println!("message: {}", msg);
 
+        let payload = &msg[2..];
         if msg.starts_with('P') {
-            self.handle_position(&msg[2..]);
+            self.handle_position(payload);
+        } else if msg.starts_with('T') {
+            self.handle_talk(payload);
         }
     }
 
@@ -165,6 +177,12 @@ impl ClientThread {
 
         if let Ok(ev) = PositionEvent::new(payload) {
             self.tx.send(IdEvent { sender: self.id, event: Event::Position(ev) }).unwrap();
+        }
+    }
+
+    fn handle_talk(&self, payload: &str) {
+        if let Ok(ev) = TalkEvent::new(payload) {
+            self.tx.send(IdEvent { sender: self.id, event: Event::Talk(ev) }).unwrap();
         }
     }
 }

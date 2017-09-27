@@ -17,6 +17,7 @@ pub struct IdEvent {
 #[derive(Debug)]
 pub enum Event {
     Position(PositionEvent),
+    Talk(TalkEvent),
 }
 
 /// Describes errors that occur parsing messages.
@@ -24,6 +25,7 @@ pub enum Event {
 pub enum MessageParseError {
      InvalidLength,
      FloatError(ParseFloatError),
+     EmptyMessageError,
 }
 
 impl Display for MessageParseError {
@@ -37,6 +39,7 @@ impl Error for MessageParseError {
         match *self {
             MessageParseError::InvalidLength => "The message had an invalid number of payload elements",
             MessageParseError::FloatError(ref e) => e.description(),
+            MessageParseError::EmptyMessageError => "The message had no content",
         }
     }
 
@@ -44,6 +47,7 @@ impl Error for MessageParseError {
         match *self {
             MessageParseError::InvalidLength => None,
             MessageParseError::FloatError(ref e) => Some(e),
+            MessageParseError::EmptyMessageError => None,
         }
     }
 }
@@ -59,6 +63,7 @@ pub struct PositionEvent {
 }
 
 impl PositionEvent {
+    /// Create a new position event information structure from an encoded payload.
     pub fn new(payload: &str) -> Result<PositionEvent, MessageParseError> {
         let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
 
@@ -96,5 +101,20 @@ impl PositionEvent {
 
     fn warn_invalid() {
         println!("Warning: invalid position packet.");
+    }
+}
+
+/// Corresponds to `T` chat messages.
+#[derive(Debug)]
+pub struct TalkEvent {
+    pub text: String,
+}
+
+impl TalkEvent {
+    /// Create a new chat event information structure from an encoded payload.
+    pub fn new(payload: &str) -> Result<TalkEvent, MessageParseError> {
+        Ok(TalkEvent {
+            text: payload.to_string(),
+        })
     }
 }
