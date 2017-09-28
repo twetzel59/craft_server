@@ -127,9 +127,9 @@ impl EventThread {
         }
     }
 
-    fn handle_talk_event(&self, sender: client::Id, ev: &TalkEvent) {
+    fn handle_talk_event(&self, _sender: client::Id, ev: &TalkEvent) {
         for i in self.clients.lock().unwrap().iter_mut() {
-            i.send_talk(sender, ev);
+            i.send_talk(ev);
         }
     }
 }

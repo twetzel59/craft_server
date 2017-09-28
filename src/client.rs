@@ -80,8 +80,13 @@ impl Client {
     }
 
     /// Sends a chat message.
-    pub fn send_talk(&mut self, _other_id: Id, ev: &TalkEvent) {
-        let msg = format!("T,{}\n", ev.text);
+    pub fn send_talk(&mut self, ev: &TalkEvent) {
+        self.broadcast_talk(&ev.text);
+    }
+
+    /// Sends a chat message without an event.
+    pub fn broadcast_talk(&mut self, text: &str) {
+        let msg = format!("T,{}\n", text);
         //println!("will send: {}", msg);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.

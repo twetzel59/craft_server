@@ -19,7 +19,7 @@ impl CommandHandler {
     /// Handle an incoming command.
     ///
     /// # Arguments
-    /// * **command**: The slice of the command the contains the name and arguments, but no `/`.
+    /// * **command**: The slice of the command contains the name and arguments, but no `/`.
     pub fn handle_command(&self, command: &str) {
         if command.starts_with("say") {
             self.handle_say(command);
@@ -29,8 +29,37 @@ impl CommandHandler {
     }
 
     fn handle_say(&self, command: &str) {
-        if command.split(' ').next().unwrap_or("") == "say" {
-            println!("SAY COMMAND");
+        let mut it = command.split(' ').peekable();
+
+        if it.next().unwrap_or("") == "say" {
+            let preserve_whitespace = if *it.peek().unwrap_or(&"") == "-w" {
+                println!("SAY COMMAND (PRESERVE WHITESPACE)");
+
+                let _ = it.next();
+
+                true
+            } else {
+                println!("SAY COMMAND");
+
+                false
+            };
+
+            // TODO: Efficiency?
+            let announcement: String = it
+                    .filter(|s| preserve_whitespace || *s != "")
+                    .map(|s| (s.to_string() + " ").lines().next().unwrap_or("").to_string())
+                    .collect();
+
+            if announcement == "" || announcement == "-w" {
+                println!("INVALID USAGE");
+                return;
+            }
+
+            println!("announcement: {:?}", announcement);
+
+            for i in self.clients.lock().unwrap().iter_mut() {
+                i.broadcast_talk(&announcement);
+            }
         } else {
             println!("INVALID USAGE");
         }
