@@ -1,9 +1,10 @@
-//! The server module is the primary place for the server's core components.
+//! This module is the primary place for the server's core components.
 
 use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use client;
+use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
 /// The core server wrapper.
@@ -73,13 +74,17 @@ impl Server {
 struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
     clients: Arc<Mutex<Vec<client::Client>>>,
+    command: CommandHandler,
 }
 
 impl EventThread {
     fn run(rx: mpsc::Receiver<IdEvent>, clients: Arc<Mutex<Vec<client::Client>>>) {
+        let command = CommandHandler::new(clients.clone());
+
         let e = EventThread {
             rx,
             clients,
+            command,
         };
 
         e.event_thread();
@@ -101,8 +106,12 @@ impl EventThread {
                             self.handle_position_event(ev.sender, &p);
                         },
                         Event::Talk(t) => {
-                            println!("CHAT: {}", t.text.lines().next().unwrap_or(""));
-                            self.handle_talk_event(ev.sender, &t);
+                            if t.text.starts_with('/') {
+                                self.command.handle_command(&t.text[1..]);
+                            } else {
+                                println!("CHAT: {}", t.text.lines().next().unwrap_or(""));
+                                self.handle_talk_event(ev.sender, &t);
+                            }
                         },
                     }
                 }
@@ -118,9 +127,9 @@ impl EventThread {
         }
     }
 
-    fn handle_talk_event(&self, sender: client::Id, ev: &TalkEvent) {
+    fn handle_talk_event(&self, _sender: client::Id, ev: &TalkEvent) {
         for i in self.clients.lock().unwrap().iter_mut() {
-            i.send_talk(sender, ev);
+            i.send_talk(ev);
         }
     }
 }
