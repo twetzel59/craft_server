@@ -4,7 +4,7 @@
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
@@ -17,6 +17,8 @@ pub struct Client {
     send_stream: TcpStream,
     //queue: VecDeque<u8>,
     id: Id,
+    thread_death: Receiver<()>,
+    alive: bool,
 }
 
 impl Client {
@@ -37,13 +39,17 @@ impl Client {
         if version_buf == [b'V', b',', b'1', b'\n'] {
             println!("{:?} joined.", addr_str);
 
+            let (death_notifier, thread_death) = mpsc::channel();
+
             let c = Client {
                 send_stream,
                 //queue: VecDeque::new(),
                 id,
+                thread_death,
+                alive: true,
             };
 
-            ClientThread::run(stream, tx, id);
+            ClientThread::run(stream, tx, id, death_notifier);
 
             return Ok(c);
         } else {
@@ -56,6 +62,29 @@ impl Client {
     /// Returns the ID of this client.
     pub fn id(&self) -> Id {
         self.id
+    }
+
+    /// Determine if the client is alive.
+    /// # Note
+    /// The `self` reference is mutable here, because the object state will save
+    /// the last check to avoid checking the client thread for its status again.
+    pub fn alive(&mut self) -> bool {
+        if self.alive {
+            // If the player left, the client thread will have died
+            // since the object state was updated!
+
+            match self.thread_death.try_recv() {
+                Ok(()) => self.alive = false,
+                Err(e) => match e {
+                    TryRecvError::Disconnected => self.alive = false,
+                    _ => {},
+                },
+            };
+
+            self.alive
+        } else {
+            false
+        }
     }
 
     /// Sends another client's position.
@@ -98,16 +127,16 @@ struct ClientThread {
     stream: TcpStream,
     tx: Sender<IdEvent>,
     id: Id,
-    alive: bool,
+    death_notifier: Sender<()>,
 }
 
 impl ClientThread {
-    fn run(stream: TcpStream, tx: Sender<IdEvent>, id: Id) {
+    fn run(stream: TcpStream, tx: Sender<IdEvent>, id: Id, death_notifier: Sender<()>) {
         let c = ClientThread {
             stream,
             tx,
             id,
-            alive: true,
+            death_notifier,
         };
 
         c.client_thread();
@@ -130,8 +159,6 @@ impl ClientThread {
                     //println!("msg: {}", msg);
                     self.handle_message(&msg);
                 } else {
-                    self.alive = false;
-
                     break;
                 }
 
@@ -146,6 +173,8 @@ impl ClientThread {
 
                 //println!("qsize: {}", self.queue.len());
             }
+
+            self.death_notifier.send(()).unwrap();
 
             println!("A client left.");
         });
