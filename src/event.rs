@@ -2,6 +2,7 @@
 //! It corresponds to some of the ASCII messages that Craft uses.
 
 use std::error::Error;
+use std::net::SocketAddr;
 use std::num::ParseFloatError;
 use std::fmt::{self, Display};
 use client;
@@ -9,7 +10,8 @@ use client;
 /// A struct that can store both events and their senders.
 #[derive(Debug)]
 pub struct IdEvent {
-    pub sender: client::Id,
+    pub id: client::Id,
+    pub peer: SocketAddr,
     pub event: Event,
 }
 

@@ -1,11 +1,13 @@
 //! This module is the primary place for the server's core components.
 
+use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use client;
 use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
+use nick::NickManager;
 
 /// The core server wrapper.
 ///
@@ -13,9 +15,10 @@ use event::{Event, IdEvent, PositionEvent, TalkEvent};
 /// server events.
 pub struct Server {
     listener: TcpListener,
-    clients: Arc<Mutex<Vec<client::Client>>>,
+    clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     current_id: client::Id,
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
+    nicks: NickManager,
 }
 
 impl Server {
@@ -24,9 +27,10 @@ impl Server {
     pub fn run() {
         let s = Server {
             listener: TcpListener::bind("127.0.0.1:4080").unwrap(),
-            clients: Arc::new(Mutex::new(Vec::new())),
+            clients: Arc::new(Mutex::new(HashMap::new())),
             current_id: 1,
             channel: mpsc::channel(),
+            nicks: NickManager::new(),
         };
 
         s.listener();
@@ -38,8 +42,8 @@ impl Server {
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
-            if let Ok(c) = client::Client::run(stream, self.channel.0.clone(), self.current_id) {
-                self.clients.lock().unwrap().push(c);
+            if let Ok(c) = client::Client::run(stream, self.channel.0.clone(), self.current_id, "bob") {
+                self.clients.lock().unwrap().insert(self.current_id, c);
             }
 
             //for x in clients {
@@ -73,12 +77,12 @@ impl Server {
 
 struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
-    clients: Arc<Mutex<Vec<client::Client>>>,
+    clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     command: CommandHandler,
 }
 
 impl EventThread {
-    fn run(rx: mpsc::Receiver<IdEvent>, clients: Arc<Mutex<Vec<client::Client>>>) {
+    fn run(rx: mpsc::Receiver<IdEvent>, clients: Arc<Mutex<HashMap<client::Id, client::Client>>>) {
         let command = CommandHandler::new(clients.clone());
 
         let e = EventThread {
@@ -103,14 +107,14 @@ impl EventThread {
                     match ev.event {
                         Event::Position(p) => {
                             println!("{:?}", p);
-                            self.handle_position_event(ev.sender, &p);
+                            self.handle_position_event(ev.id, p);
                         },
                         Event::Talk(t) => {
                             if t.text.starts_with('/') {
                                 self.command.handle_command(&t.text[1..]);
                             } else {
-                                println!("CHAT: {}", t.text.lines().next().unwrap_or(""));
-                                self.handle_talk_event(ev.sender, &t);
+                                println!("CHAT: {} {}", ev.peer, t.text.lines().next().unwrap_or(""));
+                                self.handle_talk_event(ev.id, t);
                             }
                         },
                     }
@@ -119,17 +123,21 @@ impl EventThread {
         });
     }
 
-    fn handle_position_event(&self, sender: client::Id, ev: &PositionEvent) {
+    fn handle_position_event(&self, id: client::Id, ev: PositionEvent) {
         for i in self.clients.lock().unwrap().iter_mut() {
-            if i.id() != sender {
-                i.send_position(sender, ev);
+            if *i.0 != id {
+                i.1.send_position(id, &ev);
             }
         }
     }
 
-    fn handle_talk_event(&self, _sender: client::Id, ev: &TalkEvent) {
-        for i in self.clients.lock().unwrap().iter_mut() {
-            i.send_talk(ev);
+    fn handle_talk_event(&self, id: client::Id, mut ev: TalkEvent) {
+        let mut clients = self.clients.lock().unwrap();
+
+        ev.text = format!("{}> {}", clients.get(&id).unwrap().nick(), ev.text);
+
+        for i in clients.iter_mut() {
+            i.1.send_talk(&ev);
         }
     }
 }

@@ -3,7 +3,7 @@
 
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
@@ -16,14 +16,15 @@ pub type Id = u32;
 pub struct Client {
     send_stream: TcpStream,
     //queue: VecDeque<u8>,
-    id: Id,
+    //id: Id,
+    nick: String,
     thread_death: Receiver<()>,
     alive: bool,
 }
 
 impl Client {
-    /// Launches a new client with its TCP stream and a unique ID.
-    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id) -> Result<Client, ()> {
+    /// Launches a new client with its TCP stream, a unique ID, and its nickname.
+    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: &str) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -31,37 +32,49 @@ impl Client {
         let mut version_buf: [u8; 4] = [0; 4];
         stream.read_exact(&mut version_buf).unwrap();
 
+        /*
         let addr_str = match stream.peer_addr() {
             Ok(addr) => addr.to_string(),
             Err(_) => "<unknown addr>".to_string(),
         };
+        */
+
+        let addr = stream.peer_addr().unwrap();
 
         if version_buf == [b'V', b',', b'1', b'\n'] {
-            println!("{:?} joined.", addr_str);
+            println!("{:?} joined.", addr.to_string());
 
             let (death_notifier, thread_death) = mpsc::channel();
 
             let c = Client {
                 send_stream,
                 //queue: VecDeque::new(),
-                id,
+                //id,
+                nick: nick.to_string(),
                 thread_death,
                 alive: true,
             };
 
-            ClientThread::run(stream, tx, id, death_notifier);
+            ClientThread::run(stream, addr, tx, id, nick, death_notifier);
 
             return Ok(c);
         } else {
-            println!("{:?} denied.", addr_str);
+            println!("{:?} denied.", addr.to_string());
 
             return Err(());
         }
     }
 
+    /*
     /// Returns the ID of this client.
     pub fn id(&self) -> Id {
         self.id
+    }
+    */
+
+    /// Returns this clients nickname.
+    pub fn nick(&self) -> &str {
+        &self.nick
     }
 
     /// Determine if the client is alive.
@@ -125,27 +138,33 @@ impl Client {
 
 struct ClientThread {
     stream: TcpStream,
+    addr: SocketAddr,
     tx: Sender<IdEvent>,
     id: Id,
     death_notifier: Sender<()>,
 }
 
 impl ClientThread {
-    fn run(stream: TcpStream, tx: Sender<IdEvent>, id: Id, death_notifier: Sender<()>) {
-        let c = ClientThread {
+    fn run(stream: TcpStream,
+           addr: SocketAddr,
+           tx: Sender<IdEvent>,
+           id: Id,
+           nick: &str,
+           death_notifier: Sender<()>) {
+        let mut c = ClientThread {
             stream,
+            addr,
             tx,
             id,
             death_notifier,
         };
 
+        c.send_first_messages(nick);
         c.client_thread();
     }
 
     fn client_thread(mut self) {
         thread::spawn(move || {
-            self.send_first_messages();
-
             const BUFFER_LEN: usize = 4096;
 
             loop {
@@ -180,7 +199,7 @@ impl ClientThread {
         });
     }
 
-    fn send_first_messages(&mut self) {
+    fn send_first_messages(&mut self, nick: &str) {
         let id = self.id.to_string();
 
         // Tell the client the ID it has and where spawn is.
@@ -189,7 +208,7 @@ impl ClientThread {
 
         // Tell the client its nickname.
         // N,id,name
-        let _ = self.stream.write_all(format!("N,{},player{}\n", id, id).as_bytes());
+        let _ = self.stream.write_all(format!("N,{},{}\n", id, nick).as_bytes());
     }
 
     fn handle_message(&self, msg: &str) {
@@ -210,13 +229,13 @@ impl ClientThread {
         //println!("{:?}", PositionEvent::new(payload));
 
         if let Ok(ev) = PositionEvent::new(payload) {
-            self.tx.send(IdEvent { sender: self.id, event: Event::Position(ev) }).unwrap();
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Position(ev) }).unwrap();
         }
     }
 
     fn handle_talk(&self, payload: &str) {
         if let Ok(ev) = TalkEvent::new(payload) {
-            self.tx.send(IdEvent { sender: self.id, event: Event::Talk(ev) }).unwrap();
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Talk(ev) }).unwrap();
         }
     }
 }

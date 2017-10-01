@@ -1,16 +1,17 @@
 //! The `commands` module contains the majority of the mechanism for handling chat commands.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use client;
 
 /// Allows processing of chat commands.
 pub struct CommandHandler {
-    clients: Arc<Mutex<Vec<client::Client>>>,
+    clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
 }
 
 impl CommandHandler {
     /// Creates a new CommandHandler, requiring access to the server's client list.
-    pub fn new(clients: Arc<Mutex<Vec<client::Client>>>) -> CommandHandler {
+    pub fn new(clients: Arc<Mutex<HashMap<client::Id, client::Client>>>) -> CommandHandler {
         CommandHandler {
             clients,
         }
@@ -58,7 +59,7 @@ impl CommandHandler {
             println!("announcement: {:?}", announcement);
 
             for i in self.clients.lock().unwrap().iter_mut() {
-                i.broadcast_talk(&announcement);
+                i.1.broadcast_talk(&announcement);
             }
         } else {
             println!("INVALID USAGE");
