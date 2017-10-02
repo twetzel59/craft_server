@@ -1,7 +1,7 @@
 //! This module handles loading of nicknames from the nickname file.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::fs::{File, OpenOptions};
 use std::net::IpAddr;
 //use std::str::FromStr;
@@ -37,9 +37,16 @@ impl NickManager {
         m
     }
 
-    /*pub fn get(&self, id: Id) -> &str {
-
-    }*/
+    /// Get the nickname associated with an IP address.
+    /// # Return value
+    /// If the nickname was found, the nickname is returned.
+    /// Otherwise, None is returned.
+    pub fn get(&self, ip: &IpAddr) -> Option<&str> {
+        match self.map.get(ip) {
+            Some(ref s) => Some(s),
+            None => None,
+        }
+    }
 
     fn load(&mut self) {
         /*

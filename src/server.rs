@@ -42,7 +42,12 @@ impl Server {
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
-            if let Ok(c) = client::Client::run(stream, self.channel.0.clone(), self.current_id, "bob") {
+            let nick = match self.nicks.get(&stream.peer_addr().unwrap().ip()) {
+                Some(s) => s.to_string(),
+                None => "player".to_string() + &self.current_id.to_string(),
+            };
+
+            if let Ok(c) = client::Client::run(stream, self.channel.0.clone(), self.current_id, nick) {
                 self.clients.lock().unwrap().insert(self.current_id, c);
             }
 

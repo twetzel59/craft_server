@@ -24,7 +24,7 @@ pub struct Client {
 
 impl Client {
     /// Launches a new client with its TCP stream, a unique ID, and its nickname.
-    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: &str) -> Result<Client, ()> {
+    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -46,16 +46,16 @@ impl Client {
 
             let (death_notifier, thread_death) = mpsc::channel();
 
+            ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
+
             let c = Client {
                 send_stream,
                 //queue: VecDeque::new(),
                 //id,
-                nick: nick.to_string(),
+                nick,
                 thread_death,
                 alive: true,
             };
-
-            ClientThread::run(stream, addr, tx, id, nick, death_notifier);
 
             return Ok(c);
         } else {
