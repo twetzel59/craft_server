@@ -21,11 +21,13 @@ impl CommandHandler {
     ///
     /// # Arguments
     /// * **command**: The slice of the command contains the name and arguments, but no `/`.
-    pub fn handle_command(&self, command: &str) {
-        if command.starts_with("say") {
+    pub fn handle_command(&mut self, id: client::Id, command: &str) {
+        if command.starts_with("say ") {
             self.handle_say(command);
+        } else if command.starts_with("nick ") {
+            self.handle_nick(id, command);
         } else {
-            println!("UNKNOWN COMMAND");
+            println!("UNKNOWN COMMAND OR INVALID USAGE");
         }
     }
 
@@ -63,6 +65,44 @@ impl CommandHandler {
             }
         } else {
             println!("INVALID USAGE");
+        }
+    }
+
+    fn handle_nick(&mut self, id: client::Id, command: &str) {
+        let mut it = command.split(' ');
+
+        if it.next().unwrap_or("") == "nick" {
+            let nick;
+
+            if let Some(n) = it.next() {
+                let mut n = n.trim();
+                if n.find(|c: char| !c.is_whitespace() && !c.is_control()).is_none() {
+                    println!("INVALID USAGE");
+                    return;
+                }
+
+                n = n.trim_matches(|c: char| c.is_control());
+                nick = n;
+
+                if it.next().is_some() {
+                    println!("INVALID USAGE");
+                    return;
+                }
+
+                println!("new nick: {}", nick);
+
+                let mut clients = self.clients.lock().unwrap();
+                let msg;
+                {
+                    let c = clients.get_mut(&id).unwrap();
+                    msg = format!("{} is now known as: {}", c.nick(), nick);
+                    c.set_nick(nick);
+                }
+
+                for i in clients.iter_mut() {
+                    i.1.broadcast_talk(&msg);
+                }
+            }
         }
     }
 }

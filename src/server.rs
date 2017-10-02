@@ -99,7 +99,7 @@ impl EventThread {
         e.event_thread();
     }
 
-    fn event_thread(self) {
+    fn event_thread(mut self) {
         thread::spawn(move || {
             loop {
                 if let Ok(ev) = self.rx.recv() {
@@ -116,7 +116,7 @@ impl EventThread {
                         },
                         Event::Talk(t) => {
                             if t.text.starts_with('/') {
-                                self.command.handle_command(&t.text[1..]);
+                                self.command.handle_command(ev.id, &t.text[1..]);
                             } else {
                                 println!("CHAT: {} {}", ev.peer, t.text.lines().next().unwrap_or(""));
                                 self.handle_talk_event(ev.id, t);

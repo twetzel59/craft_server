@@ -72,9 +72,14 @@ impl Client {
     }
     */
 
-    /// Returns this clients nickname.
+    /// Returns this client's nickname.
     pub fn nick(&self) -> &str {
         &self.nick
+    }
+
+    /// Sets this client's nickname.
+    pub fn set_nick(&mut self, nick: &str) {
+        self.nick = nick.to_string();
     }
 
     /// Determine if the client is alive.
