@@ -3,7 +3,7 @@
 
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
@@ -17,6 +17,7 @@ pub struct Client {
     send_stream: TcpStream,
     //queue: VecDeque<u8>,
     //id: Id,
+    addr: IpAddr,
     nick: String,
     thread_death: Receiver<()>,
     alive: bool,
@@ -52,6 +53,7 @@ impl Client {
                 send_stream,
                 //queue: VecDeque::new(),
                 //id,
+                addr: addr.ip(),
                 nick,
                 thread_death,
                 alive: true,
@@ -80,6 +82,11 @@ impl Client {
     /// Sets this client's nickname.
     pub fn set_nick(&mut self, nick: &str) {
         self.nick = nick.to_string();
+    }
+
+    /// Returns the IP address of this peer.
+    pub fn addr(&self) -> &IpAddr {
+        &self.addr
     }
 
     /// Determine if the client is alive.

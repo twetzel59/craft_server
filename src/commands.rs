@@ -3,17 +3,21 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use client;
+use nick::NickManager;
 
 /// Allows processing of chat commands.
 pub struct CommandHandler {
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+    nicks: Arc<Mutex<NickManager>>,
 }
 
 impl CommandHandler {
-    /// Creates a new CommandHandler, requiring access to the server's client list.
-    pub fn new(clients: Arc<Mutex<HashMap<client::Id, client::Client>>>) -> CommandHandler {
+    /// Creates a new CommandHandler, requiring access to the server's client list and nicknames.
+    pub fn new(clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+               nicks: Arc<Mutex<NickManager>>) -> CommandHandler {
         CommandHandler {
             clients,
+            nicks,
         }
     }
 
@@ -95,6 +99,14 @@ impl CommandHandler {
                 let msg;
                 {
                     let c = clients.get_mut(&id).unwrap();
+
+                    if c.nick() == nick {
+                        println!("Client at {:?} tried to reset the current nick", c.addr());
+                        return;
+                    }
+
+                    self.nicks.lock().unwrap().set(&c.addr(), nick);
+
                     msg = format!("{} is now known as: {}", c.nick(), nick);
                     c.set_nick(nick);
                 }

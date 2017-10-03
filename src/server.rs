@@ -18,7 +18,7 @@ pub struct Server {
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     current_id: client::Id,
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
-    nicks: NickManager,
+    nicks: Arc<Mutex<NickManager>>,
 }
 
 impl Server {
@@ -30,19 +30,19 @@ impl Server {
             clients: Arc::new(Mutex::new(HashMap::new())),
             current_id: 1,
             channel: mpsc::channel(),
-            nicks: NickManager::new(),
+            nicks: Arc::new(Mutex::new(NickManager::new())),
         };
 
         s.listener();
     }
 
     fn listener(mut self) {
-        EventThread::run(self.channel.1, self.clients.clone());
+        EventThread::run(self.channel.1, self.clients.clone(), self.nicks.clone());
 
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
-            let nick = match self.nicks.get(&stream.peer_addr().unwrap().ip()) {
+            let nick = match self.nicks.lock().unwrap().get(&stream.peer_addr().unwrap().ip()) {
                 Some(s) => s.to_string(),
                 None => "player".to_string() + &self.current_id.to_string(),
             };
@@ -83,16 +83,20 @@ impl Server {
 struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+    //nicks: Arc<Mutex<NickManager>>,
     command: CommandHandler,
 }
 
 impl EventThread {
-    fn run(rx: mpsc::Receiver<IdEvent>, clients: Arc<Mutex<HashMap<client::Id, client::Client>>>) {
-        let command = CommandHandler::new(clients.clone());
+    fn run(rx: mpsc::Receiver<IdEvent>,
+           clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+           nicks: Arc<Mutex<NickManager>>) {
+        let command = CommandHandler::new(clients.clone(), nicks);
 
         let e = EventThread {
             rx,
             clients,
+            //nicks,
             command,
         };
 
