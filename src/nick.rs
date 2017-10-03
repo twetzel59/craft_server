@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::fs::{File, OpenOptions};
 use std::net::IpAddr;
-//use std::str::FromStr;
 
 const FILE: &str = "nicks.txt";
 
@@ -56,18 +55,6 @@ impl NickManager {
     }
 
     fn load(&mut self) {
-        /*
-        let content: String = self.file.by_ref()
-                                       .bytes()
-                                       .take_while(|b| match *b {
-                                           Ok(b) => b != b'\n',
-                                           Err(_) => false,
-                                       })
-                                       .map(|b| b.unwrap() as char)
-                                       .collect();
-        println!("content: {}", content);
-        */
-
         for i in BufReader::new(self.file.try_clone().unwrap()).lines() {
             let i = i.unwrap();
 

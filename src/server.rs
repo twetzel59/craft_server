@@ -58,26 +58,6 @@ impl Server {
             self.current_id += 1;
         }
     }
-
-    /*
-    fn server(rx: mpsc::Receiver<Event>, clients: Arc<Mutex<Vec<client::Client>>>) {
-        thread::spawn(move || {
-            loop {
-                if let Ok(ev) = rx.recv() {
-                    println!("{:?}", ev);
-
-                    for c in clients.lock().unwrap().iter() {
-                        println!("{:?}", c.id());
-                    }
-                }
-            }
-        });
-    }
-    */
-
-    /*fn handle_position_event(ev: &PositionEvent) {
-
-    }*/
 }
 
 struct EventThread {

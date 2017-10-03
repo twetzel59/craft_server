@@ -192,17 +192,6 @@ impl ClientThread {
                 } else {
                     break;
                 }
-
-                //println!("buf: {:?}\n\n", &buf[0..32]);
-                //if buf[0] == b'P' {
-                //
-                //}
-
-                //for i in 0..n_written {
-                //    self.queue.push_back(buf[i]);
-                //}
-
-                //println!("qsize: {}", self.queue.len());
             }
 
             self.death_notifier.send(()).unwrap();
