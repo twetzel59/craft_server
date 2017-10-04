@@ -3,11 +3,14 @@
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Instant;
 use std::thread;
 use client;
 use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
+
+pub const DAY_LENGTH: u32 = 600;
 
 /// The core server wrapper.
 ///
@@ -19,6 +22,7 @@ pub struct Server {
     current_id: client::Id,
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
     nicks: Arc<Mutex<NickManager>>,
+    startup_time: Instant,
 }
 
 impl Server {
@@ -31,6 +35,7 @@ impl Server {
             current_id: 1,
             channel: mpsc::channel(),
             nicks: Arc::new(Mutex::new(NickManager::new())),
+            startup_time: Instant::now(),
         };
 
         s.listener();
@@ -47,7 +52,11 @@ impl Server {
                 None => "player".to_string() + &self.current_id.to_string(),
             };
 
-            if let Ok(c) = client::Client::run(stream, self.channel.0.clone(), self.current_id, nick) {
+            if let Ok(c) = client::Client::run(stream,
+                                               self.channel.0.clone(),
+                                               self.current_id,
+                                               nick,
+                                               self.startup_time) {
                 self.clients.lock().unwrap().insert(self.current_id, c);
             }
 

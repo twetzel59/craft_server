@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 //use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
+use std::time::Instant;
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
@@ -26,7 +27,7 @@ pub struct Client {
 
 impl Client {
     /// Launches a new client with its TCP stream, a unique ID, and its nickname.
-    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String) -> Result<Client, ()> {
+    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String, startup_time: Instant) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -49,7 +50,7 @@ impl Client {
             //let (death_notifier, thread_death) = mpsc::channel();
 
             //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
-            ClientThread::run(stream, addr, tx, id, &nick);
+            ClientThread::run(stream, addr, tx, id, &nick, startup_time);
 
             let c = Client {
                 send_stream,
@@ -165,7 +166,8 @@ impl ClientThread {
            addr: SocketAddr,
            tx: Sender<IdEvent>,
            id: Id,
-           nick: &str) {
+           nick: &str,
+           startup_time: Instant) {
            //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
@@ -175,7 +177,7 @@ impl ClientThread {
             //death_notifier,
         };
 
-        c.send_first_messages(nick);
+        c.send_first_messages(nick, startup_time);
         c.client_thread();
     }
 
@@ -205,12 +207,19 @@ impl ClientThread {
         });
     }
 
-    fn send_first_messages(&mut self, nick: &str) {
+    fn send_first_messages(&mut self, nick: &str, startup_time: Instant) {
+        use server::DAY_LENGTH;
+
         let id = self.id.to_string();
 
         // Tell the client the ID it has and where spawn is.
         // U,id,x,y,z,rx,ry
         let _ = self.stream.write_all(format!("U,{},0,0,0,0,0\n", id).as_bytes());
+
+        // Tell the client the current server time.
+        let _ = self.stream.write_all(format!("E,{},{}\n",
+                                              (Instant::now() - startup_time).as_secs(),
+                                              DAY_LENGTH).as_bytes());
 
         // Tell the client its nickname.
         // N,id,name
