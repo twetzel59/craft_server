@@ -18,7 +18,22 @@ pub struct IdEvent {
 /// An enum that can store all kinds of events.
 #[derive(Debug)]
 pub enum Event {
+    /*
+    /// An event used purely to wake the server event thread. This can tell the server
+    /// that a client's object state has changed. For example, a client could leave the server
+    /// while it is running. This only changes state of the *receiving* end of the client,
+    /// so the server can be sent this event to be notified of this change
+    /// and perform the necessary logic.
+    Empty,
+    */
+
+    /// Informs the server event thread that the client has left.
+    Disconnected,
+
+    /// Represents a player's change in position.
     Position(PositionEvent),
+
+    /// Represents a chat message sent from a client.
     Talk(TalkEvent),
 }
 

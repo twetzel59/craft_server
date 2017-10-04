@@ -4,7 +4,8 @@
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+//use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::Sender;
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 
@@ -19,8 +20,8 @@ pub struct Client {
     //id: Id,
     addr: IpAddr,
     nick: String,
-    thread_death: Receiver<()>,
-    alive: bool,
+    //thread_death: Receiver<()>,
+    //alive: bool,
 }
 
 impl Client {
@@ -45,9 +46,10 @@ impl Client {
         if version_buf == [b'V', b',', b'1', b'\n'] {
             println!("{:?} joined.", addr.to_string());
 
-            let (death_notifier, thread_death) = mpsc::channel();
+            //let (death_notifier, thread_death) = mpsc::channel();
 
-            ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
+            //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
+            ClientThread::run(stream, addr, tx, id, &nick);
 
             let c = Client {
                 send_stream,
@@ -55,8 +57,8 @@ impl Client {
                 //id,
                 addr: addr.ip(),
                 nick,
-                thread_death,
-                alive: true,
+                //thread_death,
+                //alive: true,
             };
 
             return Ok(c);
@@ -89,6 +91,7 @@ impl Client {
         &self.addr
     }
 
+    /*
     /// Determine if the client is alive.
     /// # Note
     /// The `self` reference is mutable here, because the object state will save
@@ -111,6 +114,7 @@ impl Client {
             false
         }
     }
+    */
 
     /// Sends another client's position.
     pub fn send_position(&mut self, other_id: Id, ev: &PositionEvent) {
@@ -153,7 +157,7 @@ struct ClientThread {
     addr: SocketAddr,
     tx: Sender<IdEvent>,
     id: Id,
-    death_notifier: Sender<()>,
+    //death_notifier: Sender<()>,
 }
 
 impl ClientThread {
@@ -161,14 +165,14 @@ impl ClientThread {
            addr: SocketAddr,
            tx: Sender<IdEvent>,
            id: Id,
-           nick: &str,
-           death_notifier: Sender<()>) {
+           nick: &str) {
+           //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
             addr,
             tx,
             id,
-            death_notifier,
+            //death_notifier,
         };
 
         c.send_first_messages(nick);
@@ -194,7 +198,8 @@ impl ClientThread {
                 }
             }
 
-            self.death_notifier.send(()).unwrap();
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Disconnected }).unwrap();
+            //self.death_notifier.send(()).unwrap();
 
             println!("A client left.");
         });

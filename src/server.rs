@@ -94,6 +94,9 @@ impl EventThread {
                     //}
 
                     match ev.event {
+                        Event::Disconnected => {
+                            self.handle_disconnect_event(ev.id);
+                        },
                         Event::Position(p) => {
                             println!("{:?}", p);
                             self.handle_position_event(ev.id, p);
@@ -110,6 +113,12 @@ impl EventThread {
                 }
             }
         });
+    }
+
+    fn handle_disconnect_event(&mut self, id: client::Id) {
+        let mut clients = self.clients.lock().unwrap();
+
+        clients.remove(&id);
     }
 
     fn handle_position_event(&self, id: client::Id, ev: PositionEvent) {
