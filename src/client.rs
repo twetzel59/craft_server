@@ -6,9 +6,9 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 //use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
-use std::time::Instant;
 use std::thread;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
+use server::ServerTime;
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -27,7 +27,7 @@ pub struct Client {
 
 impl Client {
     /// Launches a new client with its TCP stream, a unique ID, and its nickname.
-    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String, startup_time: Instant) -> Result<Client, ()> {
+    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String, daytime: ServerTime) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -50,7 +50,7 @@ impl Client {
             //let (death_notifier, thread_death) = mpsc::channel();
 
             //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
-            ClientThread::run(stream, addr, tx, id, &nick, startup_time);
+            ClientThread::run(stream, addr, tx, id, &nick, daytime);
 
             let c = Client {
                 send_stream,
@@ -167,7 +167,7 @@ impl ClientThread {
            tx: Sender<IdEvent>,
            id: Id,
            nick: &str,
-           startup_time: Instant) {
+           daytime: ServerTime) {
            //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
@@ -177,7 +177,7 @@ impl ClientThread {
             //death_notifier,
         };
 
-        c.send_first_messages(nick, startup_time);
+        c.send_first_messages(nick, daytime);
         c.client_thread();
     }
 
@@ -207,7 +207,7 @@ impl ClientThread {
         });
     }
 
-    fn send_first_messages(&mut self, nick: &str, startup_time: Instant) {
+    fn send_first_messages(&mut self, nick: &str, daytime: ServerTime) {
         use server::DAY_LENGTH;
 
         let id = self.id.to_string();
@@ -218,7 +218,7 @@ impl ClientThread {
 
         // Tell the client the current server time.
         let _ = self.stream.write_all(format!("E,{},{}\n",
-                                              (Instant::now() - startup_time).as_secs(),
+                                              daytime.time(),
                                               DAY_LENGTH).as_bytes());
 
         // Tell the client its nickname.

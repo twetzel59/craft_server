@@ -3,14 +3,14 @@
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
 
-pub const DAY_LENGTH: u32 = 600;
+pub const DAY_LENGTH: u32 = 50;
 
 /// The core server wrapper.
 ///
@@ -22,7 +22,7 @@ pub struct Server {
     current_id: client::Id,
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
     nicks: Arc<Mutex<NickManager>>,
-    startup_time: Instant,
+    daytime: ServerTime,
 }
 
 impl Server {
@@ -35,7 +35,10 @@ impl Server {
             current_id: 1,
             channel: mpsc::channel(),
             nicks: Arc::new(Mutex::new(NickManager::new())),
-            startup_time: Instant::now(),
+            daytime: ServerTime {
+                        from: Instant::now(),
+                        offset: Duration::new(DAY_LENGTH as u64 / 2, 0)
+            },
         };
 
         s.listener();
@@ -56,7 +59,7 @@ impl Server {
                                                self.channel.0.clone(),
                                                self.current_id,
                                                nick,
-                                               self.startup_time) {
+                                               self.daytime) {
                 self.clients.lock().unwrap().insert(self.current_id, c);
             }
 
@@ -146,5 +149,22 @@ impl EventThread {
         for i in clients.iter_mut() {
             i.1.send_talk(&ev);
         }
+    }
+}
+
+/// Stores the data needed to find the game time of day.
+#[derive(Copy, Clone)]
+pub struct ServerTime {
+    /// The actual time the game time was last set.
+    pub from: Instant,
+
+    /// The point to start counting from in seconds.
+    pub offset: Duration,
+}
+
+impl ServerTime {
+    pub fn time(&self) -> f32 {
+        let duration = Instant::now() - self.from + self.offset;
+        duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
     }
 }
