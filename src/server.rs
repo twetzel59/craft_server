@@ -20,6 +20,7 @@ pub struct Server {
     listener: TcpListener,
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     current_id: client::Id,
+    disconnects: (mpsc::Sender<client::Id>, mpsc::Receiver<client::Id>),
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
     nicks: Arc<Mutex<NickManager>>,
     daytime: ServerTime,
@@ -33,6 +34,7 @@ impl Server {
             listener: TcpListener::bind("127.0.0.1:4080").unwrap(),
             clients: Arc::new(Mutex::new(HashMap::new())),
             current_id: 1,
+            disconnects: mpsc::channel(),
             channel: mpsc::channel(),
             nicks: Arc::new(Mutex::new(NickManager::new())),
             daytime: ServerTime {
@@ -45,29 +47,35 @@ impl Server {
     }
 
     fn listener(mut self) {
-        EventThread::run(self.channel.1, self.clients.clone(), self.nicks.clone());
+        EventThread::run(self.channel.1, self.clients.clone(), self.disconnects.0, self.nicks.clone());
 
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
+            let id;
+            if let Ok(d) = self.disconnects.1.try_recv() {
+                id = d;
+            } else {
+                id = self.current_id;
+                self.current_id += 1;
+            }
+
             let nick = match self.nicks.lock().unwrap().get(&stream.peer_addr().unwrap().ip()) {
                 Some(s) => s.to_string(),
-                None => "player".to_string() + &self.current_id.to_string(),
+                None => "player".to_string() + &id.to_string(),
             };
 
             if let Ok(c) = client::Client::run(stream,
                                                self.channel.0.clone(),
-                                               self.current_id,
+                                               id,
                                                nick,
                                                self.daytime) {
-                self.clients.lock().unwrap().insert(self.current_id, c);
+                self.clients.lock().unwrap().insert(id, c);
             }
 
             //for x in clients {
             //    println!("client {}: {}", x.id(), x.alive());
             //}
-
-            self.current_id += 1;
         }
     }
 }
@@ -75,6 +83,7 @@ impl Server {
 struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+    disconnects: mpsc::Sender<client::Id>,
     //nicks: Arc<Mutex<NickManager>>,
     command: CommandHandler,
 }
@@ -82,12 +91,14 @@ struct EventThread {
 impl EventThread {
     fn run(rx: mpsc::Receiver<IdEvent>,
            clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
+           disconnects: mpsc::Sender<client::Id>,
            nicks: Arc<Mutex<NickManager>>) {
         let command = CommandHandler::new(clients.clone(), nicks);
 
         let e = EventThread {
             rx,
             clients,
+            disconnects,
             //nicks,
             command,
         };
@@ -129,8 +140,9 @@ impl EventThread {
 
     fn handle_disconnect_event(&mut self, id: client::Id) {
         let mut clients = self.clients.lock().unwrap();
-
         clients.remove(&id);
+
+        self.disconnects.send(id).unwrap();
     }
 
     fn handle_position_event(&self, id: client::Id, ev: PositionEvent) {
