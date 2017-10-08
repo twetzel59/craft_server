@@ -10,7 +10,7 @@ use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
 
-pub const DAY_LENGTH: u32 = 50;
+pub const DAY_LENGTH: u32 = 600;
 
 /// The core server wrapper.
 ///
