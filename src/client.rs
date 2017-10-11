@@ -1,6 +1,7 @@
 //! The `client` module contains all of the machinery for the server-side representation of
 //! a client.
 
+use std::collections::HashMap;
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
@@ -34,7 +35,7 @@ impl Client {
                id: Id,
                nick: String,
                daytime: ServerTime,
-               all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) -> Result<Client, ()> {
+               other_clients: &HashMap<Id, Client>) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -57,7 +58,7 @@ impl Client {
             //let (death_notifier, thread_death) = mpsc::channel();
 
             //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
-            ClientThread::run(stream, addr, tx, id, &nick, daytime, all_positions);
+            ClientThread::run(stream, addr, tx, id, &nick, daytime, &other_clients);
 
             let c = Client {
                 send_stream,
@@ -187,7 +188,8 @@ impl ClientThread {
            id: Id,
            nick: &str,
            daytime: ServerTime,
-           all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
+           other_clients: &HashMap<Id, Client>) {
+           //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
            //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
@@ -197,7 +199,7 @@ impl ClientThread {
             //death_notifier,
         };
 
-        c.send_first_messages(nick, daytime, all_positions);
+        c.send_first_messages(nick, daytime, other_clients);
         c.client_thread();
     }
 
@@ -230,7 +232,8 @@ impl ClientThread {
     fn send_first_messages(&mut self,
                           nick: &str,
                           daytime: ServerTime,
-                          all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
+                          other_clients: &HashMap<Id, Client>) {
+                          //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
         use server::DAY_LENGTH;
 
         let id = self.id.to_string();
@@ -245,16 +248,19 @@ impl ClientThread {
                                               daytime.time(),
                                               DAY_LENGTH).as_bytes());
 
-        // Tell the client where other players are.
-        // P,id,x,y,z,rx,ry
-        for i in all_positions {
+
+        for i in other_clients {
+            let transform = i.1.position();
+
+            // Tell the client where other players are.
+            // P,id,x,y,z,rx,ry
             let _ = self.stream.write_all(format!("P,{},{},{},{},{},{}\n",
                                                   i.0,
-                                                  (i.1).0,
-                                                  (i.1).1,
-                                                  (i.1).2,
-                                                  (i.1).3,
-                                                  (i.1).4).as_bytes());
+                                                  transform.0,
+                                                  transform.1,
+                                                  transform.2,
+                                                  transform.3,
+                                                  transform.4).as_bytes());
         }
 
         // Tell the client its nickname.

@@ -49,7 +49,7 @@ impl Server {
     fn listener(mut self) {
         EventThread::run(self.channel.1, self.clients.clone(), self.disconnects.0, self.nicks.clone());
 
-        let mut all_positions = Vec::new();
+        //let mut all_positions = Vec::new();
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
@@ -68,10 +68,10 @@ impl Server {
 
             let mut clients = self.clients.lock().unwrap();
 
-            all_positions.clear();
-            for i in clients.iter() {
-                all_positions.push((*i.0, i.1.position()));
-            }
+            //all_positions.clear();
+            //for i in clients.iter() {
+            //    all_positions.push((*i.0, i.1.position()));
+            //}
             //println!("all_positions: {:?}", all_positions);
 
             if let Ok(c) = client::Client::run(stream,
@@ -79,7 +79,7 @@ impl Server {
                                                id,
                                                nick,
                                                self.daytime,
-                                               &all_positions) {
+                                               &clients) {
                 clients.insert(id, c);
             }
 
