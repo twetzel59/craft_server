@@ -1,6 +1,7 @@
 //! The `client` module contains all of the machinery for the server-side representation of
 //! a client.
 
+use std::collections::HashMap;
 //use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
@@ -23,11 +24,18 @@ pub struct Client {
     nick: String,
     //thread_death: Receiver<()>,
     //alive: bool,
+    position: (f32, f32, f32, f32, f32),
 }
 
 impl Client {
     /// Launches a new client with its TCP stream, a unique ID, and its nickname.
-    pub fn run(mut stream: TcpStream, tx: Sender<IdEvent>, id: Id, nick: String, daytime: ServerTime) -> Result<Client, ()> {
+    /// Also needed is the current server time and player transforms.
+    pub fn run(mut stream: TcpStream,
+               tx: Sender<IdEvent>,
+               id: Id,
+               nick: String,
+               daytime: ServerTime,
+               other_clients: &HashMap<Id, Client>) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -50,7 +58,7 @@ impl Client {
             //let (death_notifier, thread_death) = mpsc::channel();
 
             //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
-            ClientThread::run(stream, addr, tx, id, &nick, daytime);
+            ClientThread::run(stream, addr, tx, id, &nick, daytime, &other_clients);
 
             let c = Client {
                 send_stream,
@@ -60,6 +68,7 @@ impl Client {
                 nick,
                 //thread_death,
                 //alive: true,
+                position: (0., 0., 0., 0., 0.),
             };
 
             return Ok(c);
@@ -90,6 +99,17 @@ impl Client {
     /// Returns the IP address of this peer.
     pub fn addr(&self) -> &IpAddr {
         &self.addr
+    }
+
+    /// Returns the player's transform, in the format
+    /// (x, y, z, rx, ry)
+    pub fn position(&self) -> (f32, f32, f32, f32, f32) {
+        self.position
+    }
+
+    /// Sets the player's transform **server-side**
+    pub fn set_position(&mut self, position: (f32, f32, f32, f32, f32)) {
+        self.position = position;
     }
 
     /*
@@ -167,7 +187,9 @@ impl ClientThread {
            tx: Sender<IdEvent>,
            id: Id,
            nick: &str,
-           daytime: ServerTime) {
+           daytime: ServerTime,
+           other_clients: &HashMap<Id, Client>) {
+           //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
            //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
@@ -177,7 +199,7 @@ impl ClientThread {
             //death_notifier,
         };
 
-        c.send_first_messages(nick, daytime);
+        c.send_first_messages(nick, daytime, other_clients);
         c.client_thread();
     }
 
@@ -207,7 +229,11 @@ impl ClientThread {
         });
     }
 
-    fn send_first_messages(&mut self, nick: &str, daytime: ServerTime) {
+    fn send_first_messages(&mut self,
+                          nick: &str,
+                          daytime: ServerTime,
+                          other_clients: &HashMap<Id, Client>) {
+                          //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
         use server::DAY_LENGTH;
 
         let id = self.id.to_string();
@@ -217,9 +243,28 @@ impl ClientThread {
         let _ = self.stream.write_all(format!("U,{},0,0,0,0,0\n", id).as_bytes());
 
         // Tell the client the current server time.
+        // E,time,day_length
         let _ = self.stream.write_all(format!("E,{},{}\n",
                                               daytime.time(),
                                               DAY_LENGTH).as_bytes());
+
+        for i in other_clients {
+            let transform = i.1.position();
+
+            // Tell the client where other players are.
+            // P,id,x,y,z,rx,ry
+            let _ = self.stream.write_all(format!("P,{},{},{},{},{},{}\n",
+                                                  i.0,
+                                                  transform.0,
+                                                  transform.1,
+                                                  transform.2,
+                                                  transform.3,
+                                                  transform.4).as_bytes());
+
+            // Tell the client what the others' nickanmes are.
+            // N,id,name
+            let _ = self.stream.write_all(format!("N,{},{}\n", i.0, i.1.nick()).as_bytes());
+        }
 
         // Tell the client its nickname.
         // N,id,name
