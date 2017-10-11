@@ -31,7 +31,7 @@ impl Server {
     /// and the server listener and event threads will start immediately.
     pub fn run() {
         let s = Server {
-            listener: TcpListener::bind("127.0.0.1:4080").unwrap(),
+            listener: TcpListener::bind("0.0.0.0:4080").unwrap(),
             clients: Arc::new(Mutex::new(HashMap::new())),
             current_id: 1,
             disconnects: mpsc::channel(),
