@@ -63,7 +63,7 @@ impl Server {
 
             let nick = match self.nicks.lock().unwrap().get(&stream.peer_addr().unwrap().ip()) {
                 Some(s) => s.to_string(),
-                None => "player".to_string() + &id.to_string(),
+                None => "guest".to_string() + &id.to_string(),
             };
 
             let mut clients = self.clients.lock().unwrap();
