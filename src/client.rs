@@ -248,7 +248,6 @@ impl ClientThread {
                                               daytime.time(),
                                               DAY_LENGTH).as_bytes());
 
-
         for i in other_clients {
             let transform = i.1.position();
 
@@ -261,6 +260,10 @@ impl ClientThread {
                                                   transform.2,
                                                   transform.3,
                                                   transform.4).as_bytes());
+
+            // Tell the client what the others' nickanmes are.
+            // N,id,name
+            let _ = self.stream.write_all(format!("N,{},{}\n", i.0, i.1.nick()).as_bytes());
         }
 
         // Tell the client its nickname.
