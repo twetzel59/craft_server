@@ -106,13 +106,14 @@ impl CommandHandler {
                     }
 
                     self.nicks.lock().unwrap().set(&c.addr(), nick);
+                    c.set_nick(nick);
 
                     msg = format!("{} is now known as: {}", c.nick(), nick);
-                    c.set_nick(nick);
                 }
 
-                for i in clients.iter_mut() {
-                    i.1.broadcast_talk(&msg);
+                for i in clients.values_mut() {
+                    i.broadcast_talk(&msg);
+                    i.broadcast_nick(id, nick);
                 }
             }
         }
