@@ -163,6 +163,15 @@ impl Client {
         self.broadcast_talk(&ev.text);
     }
 
+    /// Notifies the client that another client has left.
+    pub fn send_disconnect(&mut self, other_id: Id) {
+        let msg = format!("D,{}\n", other_id);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
     /// Sends a chat message without an event.
     pub fn broadcast_talk(&mut self, text: &str) {
         let msg = format!("T,{}\n", text);

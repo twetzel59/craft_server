@@ -150,9 +150,25 @@ impl EventThread {
 
     fn handle_disconnect_event(&mut self, id: client::Id) {
         let mut clients = self.clients.lock().unwrap();
+
+        let msg = match clients.get(&id) {
+            Some(client) => Some(client.nick().to_string() + " has left the game"),
+            None => None,
+        };
+
         clients.remove(&id);
 
         self.disconnects.send(id).unwrap();
+
+        for i in clients.iter_mut() {
+            if *i.0 != id {
+                i.1.send_disconnect(id);
+
+                if let Some(ref m) = msg {
+                    i.1.broadcast_talk(&m);
+                }
+            }
+        }
     }
 
     fn handle_position_event(&self, id: client::Id, ev: PositionEvent) {
