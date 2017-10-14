@@ -79,7 +79,7 @@ impl Server {
                                                id,
                                                nick,
                                                self.daytime,
-                                               &clients) {
+                                               &mut clients) {
                 clients.insert(id, c);
             }
 

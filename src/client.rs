@@ -35,7 +35,7 @@ impl Client {
                id: Id,
                nick: String,
                daytime: ServerTime,
-               other_clients: &HashMap<Id, Client>) -> Result<Client, ()> {
+               other_clients: &mut HashMap<Id, Client>) -> Result<Client, ()> {
         println!("New client id: {}", id);
 
         let send_stream = stream.try_clone().unwrap();
@@ -58,7 +58,7 @@ impl Client {
             //let (death_notifier, thread_death) = mpsc::channel();
 
             //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
-            ClientThread::run(stream, addr, tx, id, &nick, daytime, &other_clients);
+            ClientThread::run(stream, addr, tx, id, &nick, daytime, other_clients);
 
             let c = Client {
                 send_stream,
@@ -171,6 +171,15 @@ impl Client {
         // TODO: What if the stream is now closed? Alert something that client is disconnected.
         let _ = self.send_stream.write_all(msg.as_bytes());
     }
+
+    /// Sends another player's nickname to this client.
+    pub fn broadcast_nick(&mut self, other_id: Id, nick: &str) {
+        let msg = format!("N,{},{}\n", other_id, nick);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
 }
 
 struct ClientThread {
@@ -188,7 +197,7 @@ impl ClientThread {
            id: Id,
            nick: &str,
            daytime: ServerTime,
-           other_clients: &HashMap<Id, Client>) {
+           other_clients: &mut HashMap<Id, Client>) {
            //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
            //death_notifier: Sender<()>) {
         let mut c = ClientThread {
@@ -232,7 +241,7 @@ impl ClientThread {
     fn send_first_messages(&mut self,
                           nick: &str,
                           daytime: ServerTime,
-                          other_clients: &HashMap<Id, Client>) {
+                          other_clients: &mut HashMap<Id, Client>) {
                           //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
         use server::DAY_LENGTH;
 
@@ -264,6 +273,15 @@ impl ClientThread {
             // Tell the client what the others' nickanmes are.
             // N,id,name
             let _ = self.stream.write_all(format!("N,{},{}\n", i.0, i.1.nick()).as_bytes());
+
+            // The the *other* clients what that this player exists.
+            // Note that in the Craft client, a player is initialized client-side
+            // upon receiving of the first position message with the player's ID.
+            i.1.send_position(self.id, &PositionEvent { x: 0., y: 0., z: 0., rx: 0., ry: 0. });
+
+            // Tell the *other* clients what this player's nickname is.
+            // N,id,name
+            i.1.broadcast_nick(self.id, nick);
         }
 
         // Tell the client its nickname.
