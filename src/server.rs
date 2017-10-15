@@ -9,6 +9,7 @@ use client;
 use commands::CommandHandler;
 use event::{Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
+use world::World;
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -24,6 +25,7 @@ pub struct Server {
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
     nicks: Arc<Mutex<NickManager>>,
     daytime: ServerTime,
+    world: World,
 }
 
 impl Server {
@@ -39,8 +41,9 @@ impl Server {
             nicks: Arc::new(Mutex::new(NickManager::new())),
             daytime: ServerTime {
                         from: Instant::now(),
-                        offset: Duration::new(DAY_LENGTH as u64 / 2, 0)
+                        offset: Duration::new(DAY_LENGTH as u64 / 2, 0),
             },
+            world: World::new(),
         };
 
         s.listener();
