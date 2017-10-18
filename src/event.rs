@@ -3,7 +3,7 @@
 
 use std::error::Error;
 use std::net::SocketAddr;
-use std::num::ParseFloatError;
+use std::num::{ParseFloatError, ParseIntError};
 use std::fmt::{self, Display};
 use client;
 
@@ -35,12 +35,16 @@ pub enum Event {
 
     /// Represents a chat message sent from a client.
     Talk(TalkEvent),
+
+    /// Represents a block placed (or mined) on a client.
+    Block(BlockEvent),
 }
 
 /// Describes errors that occur parsing messages.
 #[derive(Debug)]
 pub enum MessageParseError {
      InvalidLength,
+     IntError(ParseIntError),
      FloatError(ParseFloatError),
      EmptyMessageError,
 }
@@ -55,6 +59,7 @@ impl Error for MessageParseError {
     fn description(&self) -> &str {
         match *self {
             MessageParseError::InvalidLength => "The message had an invalid number of payload elements",
+            MessageParseError::IntError(ref e) => e.description(),
             MessageParseError::FloatError(ref e) => e.description(),
             MessageParseError::EmptyMessageError => "The message had no content",
         }
@@ -63,6 +68,7 @@ impl Error for MessageParseError {
     fn cause(&self) -> Option<&Error> {
         match *self {
             MessageParseError::InvalidLength => None,
+            MessageParseError::IntError(ref e) => Some(e),
             MessageParseError::FloatError(ref e) => Some(e),
             MessageParseError::EmptyMessageError => None,
         }
@@ -133,5 +139,52 @@ impl TalkEvent {
         Ok(TalkEvent {
             text: payload.to_string(),
         })
+    }
+}
+
+/// Corresponds to `B` block messages.
+#[derive(Debug)]
+pub struct BlockEvent {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub w: u8,
+}
+
+impl BlockEvent {
+    /// Create a new block event information structure from an encoded payload.
+    pub fn new(payload: &str) -> Result<BlockEvent, MessageParseError> {
+        let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
+
+        if pieces.len() != 5 {
+            Self::warn_invalid();
+            return Err(MessageParseError::InvalidLength);
+        }
+
+        match Self::parse_all(&pieces) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                Self::warn_invalid();
+                Err(MessageParseError::IntError(e))
+            },
+        }
+    }
+
+    fn parse_all(pieces: &Vec<&str>) -> Result<BlockEvent, ParseIntError> {
+        let x = pieces[0].parse()?;
+        let y = pieces[1].parse()?;
+        let z = pieces[2].parse()?;
+        let w = pieces[3].parse()?;
+
+        Ok(BlockEvent {
+            x,
+            y,
+            z,
+            w,
+        })
+    }
+
+    fn warn_invalid() {
+        println!("Warning: invalid block packet.");
     }
 }

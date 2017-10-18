@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
-use world::World;
+use world::{Block, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -50,7 +50,11 @@ impl Server {
     }
 
     fn listener(mut self) {
-        EventThread::run(self.channel.1, self.clients.clone(), self.disconnects.0, self.nicks.clone());
+        EventThread::run(self.channel.1,
+                         self.clients.clone(),
+                         self.disconnects.0,
+                         self.world,
+                         self.nicks.clone());
 
         //let mut all_positions = Vec::new();
         for i in self.listener.incoming() {
@@ -97,6 +101,7 @@ struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     disconnects: mpsc::Sender<client::Id>,
+    world: World,
     //nicks: Arc<Mutex<NickManager>>,
     command: CommandHandler,
 }
@@ -105,6 +110,7 @@ impl EventThread {
     fn run(rx: mpsc::Receiver<IdEvent>,
            clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
            disconnects: mpsc::Sender<client::Id>,
+           world: World,
            nicks: Arc<Mutex<NickManager>>) {
         let command = CommandHandler::new(clients.clone(), nicks);
 
@@ -112,6 +118,7 @@ impl EventThread {
             rx,
             clients,
             disconnects,
+            world,
             //nicks,
             command,
         };
@@ -145,6 +152,10 @@ impl EventThread {
                                 self.handle_talk_event(ev.id, t);
                             }
                         },
+                        Event::Block(b) => {
+                            println!("{:?}", b);
+                            self.handle_block_event(ev.id, b);
+                        }
                     }
                 }
             }
@@ -192,6 +203,10 @@ impl EventThread {
         for i in clients.iter_mut() {
             i.1.send_talk(&ev);
         }
+    }
+
+    fn handle_block_event(&mut self, _id: client::Id, ev: BlockEvent) {
+        self.world.set_block((ev.x, ev.y, ev.z), Block(ev.w));
     }
 }
 

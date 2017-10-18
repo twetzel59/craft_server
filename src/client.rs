@@ -8,7 +8,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 //use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use server::ServerTime;
 
 /// A type representing the ID players are given to uniquely identify them on both the client
@@ -307,6 +307,8 @@ impl ClientThread {
             self.handle_position(payload);
         } else if msg.starts_with('T') {
             self.handle_talk(payload);
+        } else if msg.starts_with('B') {
+            self.handle_block(payload);
         }
     }
 
@@ -323,6 +325,12 @@ impl ClientThread {
     fn handle_talk(&self, payload: &str) {
         if let Ok(ev) = TalkEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Talk(ev) }).unwrap();
+        }
+    }
+
+    fn handle_block(&self, payload: &str) {
+        if let Ok(ev) = BlockEvent::new(payload) {
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Block(ev) }).unwrap();
         }
     }
 }
