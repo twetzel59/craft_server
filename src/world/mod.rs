@@ -33,39 +33,20 @@ impl Chunk {
     }
 }
 
-/// Manages a world and the SQLite connection to persist it on disk.
-pub struct World {
-    conn: Connection,
+struct ChunkManager {
     chunks: HashMap<(i32, i32), Chunk>,
 }
 
-impl World {
-    /// Create a new world manager. The SQLite database will be created
-    /// or opened.
-    /// # Panics
-    /// This function panics if the SQLite connection fails or the necessary
-    /// initial queries can not be performed successfully.
-    pub fn new() -> World {
-        print!("Loading world... ");
-
-        let conn = sqlite::open(FILE).unwrap();
-
-        let w = World {
-            conn,
+impl ChunkManager {
+    fn new() -> ChunkManager {
+        ChunkManager {
             chunks: HashMap::new(),
-        };
-
-        w.initial_queries();
-
-        println!("OK");
-
-        w
+        }
     }
 
-    /// Set a block in the world with the given global coordinates.
-    pub fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
+    fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
         // P and Q are chunk/sector x and z.
-        let (p, q) = (Self::chunked(global_pos.0), Self::chunked(global_pos.2));
+        let (p, q) = (chunked(global_pos.0), chunked(global_pos.2));
 
         //println!("(p, q): {}, {}", p, q);
         let local_pos = ((global_pos.0 - p * CHUNK_SIZE as i32) as u8,
@@ -78,7 +59,7 @@ impl World {
             chunk.set_block(local_pos, block);
         }
 
-        println!("entire world: {:?}", self.chunks);
+        //println!("entire world: {:?}", self.chunks);
         /*
         if let Some(c) = self.chunks.get_mut(&(p, q)) {
             println!("case 1");
@@ -93,14 +74,62 @@ impl World {
         }
         */
     }
+}
+
+/// Manages a world and the SQLite connection to persist it on disk.
+pub struct World {
+    conn: Connection,
+    chunk_mgr: ChunkManager,
+}
+
+impl World {
+    /// Create a new world manager. The SQLite database will be created
+    /// or opened.
+    /// # Panics
+    /// This function panics if the SQLite connection fails or the necessary
+    /// initial queries can not be performed successfully.
+    pub fn new() -> World {
+        print!("Loading world... ");
+
+        let conn = sqlite::open(FILE).unwrap();
+
+        let mut w = World {
+            conn,
+            chunk_mgr: ChunkManager::new(),
+        };
+
+        w.initial_queries();
+        w.load_blocks();
+
+        println!("OK");
+
+        w
+    }
+
+    /// Set a block in the world with the given global coordinates.
+    pub fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
+        self.chunk_mgr.set_block(global_pos, block);
+    }
 
     fn initial_queries(&self) {
-        for i in &queries::INITIAL {
-            self.conn.execute(i).unwrap();
-        }
+        self.conn.execute(queries::INITIAL).unwrap();
     }
 
-    fn chunked(n: i32) -> i32 {
-        (n as f32 / CHUNK_SIZE as f32).floor() as i32
+    fn load_blocks(&mut self) {
+        let mut cursor = self.conn.prepare(queries::LOAD_BLOCKS).unwrap().cursor();
+
+        while let Some(record) = cursor.next().unwrap() {
+            let (xyz, w) = ((record[0].as_integer().unwrap() as i32,
+                             record[1].as_integer().unwrap() as i32,
+                             record[2].as_integer().unwrap() as i32),
+                             record[3].as_integer().unwrap() as u8);
+
+            //println!("values: ({}, {}, {}): {}", x, y, z, w);
+            self.chunk_mgr.set_block(xyz, Block(w));
+        }
     }
+}
+
+fn chunked(n: i32) -> i32 {
+    (n as f32 / CHUNK_SIZE as f32).floor() as i32
 }
