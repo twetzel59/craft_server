@@ -10,6 +10,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use event::{BlockEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use server::ServerTime;
+use world::chunked;
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -161,6 +162,28 @@ impl Client {
     /// Sends a chat message.
     pub fn send_talk(&mut self, ev: &TalkEvent) {
         self.broadcast_talk(&ev.text);
+    }
+
+    /// Tells the client that a block has changed.
+    pub fn send_block(&mut self, ev: &BlockEvent) {
+        let (p, q) = (chunked(ev.x), chunked(ev.z));
+
+        // We are sending a block with B,p,q,x,y,z.
+        // Then, we instruct that we are done batch
+        // modifying blocks (only 1 in this case),
+        // and are ready to re-render the chunk:
+        // R,p,q.
+        let msg = format!("B,{},{},{},{},{},{}\nR,{},{}\n",
+                          p, q,
+                          ev.x.to_string(),
+                          ev.y.to_string(),
+                          ev.z.to_string(),
+                          ev.w.to_string(),
+                          p, q);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
     }
 
     /// Notifies the client that another client has left.

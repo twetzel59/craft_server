@@ -130,6 +130,7 @@ impl World {
     }
 }
 
-fn chunked(n: i32) -> i32 {
+/// Return the chunk that a block falls in on one axis.
+pub fn chunked(n: i32) -> i32 {
     (n as f32 / CHUNK_SIZE as f32).floor() as i32
 }

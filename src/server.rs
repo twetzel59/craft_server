@@ -205,8 +205,14 @@ impl EventThread {
         }
     }
 
-    fn handle_block_event(&mut self, _id: client::Id, ev: BlockEvent) {
+    fn handle_block_event(&mut self, id: client::Id, ev: BlockEvent) {
         self.world.set_block((ev.x, ev.y, ev.z), Block(ev.w));
+
+        for i in self.clients.lock().unwrap().iter_mut() {
+            if *i.0 != id {
+                i.1.send_block(&ev);
+            }
+        }
     }
 }
 
