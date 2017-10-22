@@ -8,9 +8,9 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 //use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{BlockEvent, Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use server::ServerTime;
-use world::chunked;
+use world::{Block, chunked};
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -166,24 +166,7 @@ impl Client {
 
     /// Tells the client that a block has changed.
     pub fn send_block(&mut self, ev: &BlockEvent) {
-        let (p, q) = (chunked(ev.x), chunked(ev.z));
-
-        // We are sending a block with B,p,q,x,y,z.
-        // Then, we instruct that we are done batch
-        // modifying blocks (only 1 in this case),
-        // and are ready to re-render the chunk:
-        // R,p,q.
-        let msg = format!("B,{},{},{},{},{},{}\nR,{},{}\n",
-                          p, q,
-                          ev.x.to_string(),
-                          ev.y.to_string(),
-                          ev.z.to_string(),
-                          ev.w.to_string(),
-                          p, q);
-        //println!("will send: {}", msg);
-
-        // TODO: What if the stream is now closed? Alert something that client is disconnected.
-        let _ = self.send_stream.write_all(msg.as_bytes());
+        self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)));
     }
 
     /// Notifies the client that another client has left.
@@ -207,6 +190,30 @@ impl Client {
     /// Sends another player's nickname to this client.
     pub fn broadcast_nick(&mut self, other_id: Id, nick: &str) {
         let msg = format!("N,{},{}\n", other_id, nick);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    pub fn broadcast_block(&mut self, block: ((i32, i32, i32), &Block)) {
+        let (p, q) = (chunked((block.0).0), chunked((block.0).2));
+
+        // We are sending a block with B,p,q,x,y,z,w.
+        let msg = format!("B,{},{},{},{},{},{}",
+                          p, q,
+                          (block.0).0.to_string(),
+                          (block.0).1.to_string(),
+                          (block.0).2.to_string(),
+                          (block.1).0.to_string());
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    pub fn broadcast_redraw(&mut self, chunk: (i32, i32)) {
+        let msg = format!("R,{},{}\n", chunk.0, chunk.1);
         //println!("will send: {}", msg);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.
@@ -257,7 +264,11 @@ impl ClientThread {
                     let msg = String::from_utf8_lossy(&buf);
 
                     //println!("msg: {}", msg);
-                    self.handle_message(&msg);
+
+                    for i in msg.lines() {
+                        //println!("i: {}", i);
+                        self.handle_message(i);
+                    }
                 } else {
                     break;
                 }
@@ -332,6 +343,8 @@ impl ClientThread {
             self.handle_talk(payload);
         } else if msg.starts_with('B') {
             self.handle_block(payload);
+        } else if msg.starts_with('C') {
+            self.handle_chunk(payload);
         }
     }
 
@@ -354,6 +367,12 @@ impl ClientThread {
     fn handle_block(&self, payload: &str) {
         if let Ok(ev) = BlockEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Block(ev) }).unwrap();
+        }
+    }
+
+    fn handle_chunk(&self, payload: &str) {
+        if let Ok(ev) = ChunkRequestEvent::new(payload) {
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::ChunkRequest(ev) }).unwrap();
         }
     }
 }

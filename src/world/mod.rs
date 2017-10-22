@@ -5,10 +5,12 @@ mod queries;
 
 const FILE: &str = "world.db";
 
+use std::collections::hash_map;
 use std::collections::HashMap;
 use sqlite::{self, Connection};
 
-const CHUNK_SIZE: u8 = 32;
+/// The square X and Z dimensions of a world sector.
+pub const CHUNK_SIZE: u8 = 32;
 
 /// Type of block IDs.
 #[derive(Debug)]
@@ -30,6 +32,15 @@ impl Chunk {
 
     fn set_block(&mut self, local_pos: (u8, u8, u8), block: Block) {
         self.blocks.insert(local_pos, block);
+    }
+}
+
+impl<'a> IntoIterator for &'a Chunk {
+    type Item = (&'a (u8, u8, u8), &'a Block);
+    type IntoIter = hash_map::Iter<'a, (u8, u8, u8), Block>;
+
+    fn into_iter(self) -> hash_map::Iter<'a, (u8, u8, u8), Block> {
+        self.blocks.iter()
     }
 }
 
@@ -74,6 +85,10 @@ impl ChunkManager {
         }
         */
     }
+
+    fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {
+        self.chunks.get(&pq)
+    }
 }
 
 /// Manages a world and the SQLite connection to persist it on disk.
@@ -109,6 +124,13 @@ impl World {
     /// Set a block in the world with the given global coordinates.
     pub fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
         self.chunk_mgr.set_block(global_pos, block);
+    }
+
+    pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
+        match self.chunk_mgr.get(chunk) {
+            Some(c) => Some(c.into_iter()),
+            None => None,
+        }
     }
 
     fn initial_queries(&self) {

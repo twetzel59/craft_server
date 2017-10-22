@@ -38,6 +38,9 @@ pub enum Event {
 
     /// Represents a block placed (or mined) on a client.
     Block(BlockEvent),
+
+    /// Represents a request for chunk data from a client.
+    ChunkRequest(ChunkRequestEvent),
 }
 
 /// Describes errors that occur parsing messages.
@@ -90,7 +93,7 @@ impl PositionEvent {
     pub fn new(payload: &str) -> Result<PositionEvent, MessageParseError> {
         let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
 
-        if pieces.len() != 6 {
+        if pieces.len() != 5 {
             Self::warn_invalid();
             return Err(MessageParseError::InvalidLength);
         }/* else {
@@ -156,7 +159,7 @@ impl BlockEvent {
     pub fn new(payload: &str) -> Result<BlockEvent, MessageParseError> {
         let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
 
-        if pieces.len() != 5 {
+        if pieces.len() != 4 {
             Self::warn_invalid();
             return Err(MessageParseError::InvalidLength);
         }
@@ -186,5 +189,49 @@ impl BlockEvent {
 
     fn warn_invalid() {
         println!("Warning: invalid block packet.");
+    }
+}
+
+/// Corresponds to `C` chunk data request messages.
+#[derive(Debug)]
+pub struct ChunkRequestEvent {
+    pub p: i32,
+    pub q: i32,
+    //pub key: i32,
+}
+
+impl ChunkRequestEvent {
+    /// Create a new chunk data request event information structure from an encoded payload.
+    pub fn new(payload: &str) -> Result<ChunkRequestEvent, MessageParseError> {
+        let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
+
+        if pieces.len() != 3 {
+            Self::warn_invalid();
+            return Err(MessageParseError::InvalidLength);
+        }
+
+        match Self::parse_all(&pieces) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                Self::warn_invalid();
+                Err(MessageParseError::IntError(e))
+            },
+        }
+    }
+
+    fn parse_all(pieces: &Vec<&str>) -> Result<ChunkRequestEvent, ParseIntError> {
+        let p = pieces[0].parse()?;
+        let q = pieces[1].parse()?;
+        //let key = pieces[2].parse()?;
+
+        Ok(ChunkRequestEvent {
+            p,
+            q,
+            //key,
+        })
+    }
+
+    fn warn_invalid() {
+        println!("Warning: invalid chunk data request packet.");
     }
 }

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{BlockEvent, Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
 use world::{Block, World};
 
@@ -156,6 +156,10 @@ impl EventThread {
                             println!("{:?}", b);
                             self.handle_block_event(ev.id, b);
                         }
+                        Event::ChunkRequest(c) => {
+                            println!("{:?}", c);
+                            self.handle_chunk_event(ev.id, c);
+                        }
                     }
                 }
             }
@@ -206,11 +210,37 @@ impl EventThread {
     }
 
     fn handle_block_event(&mut self, id: client::Id, ev: BlockEvent) {
+        use world::chunked;
+
         self.world.set_block((ev.x, ev.y, ev.z), Block(ev.w));
 
         for i in self.clients.lock().unwrap().iter_mut() {
             if *i.0 != id {
                 i.1.send_block(&ev);
+                i.1.broadcast_redraw((chunked(ev.x), chunked(ev.z)));
+            }
+        }
+    }
+
+    fn handle_chunk_event(&self, id: client::Id, ev: ChunkRequestEvent) {
+        use world::CHUNK_SIZE;
+
+        let mut clients = self.clients.lock().unwrap();
+
+        if let Some(c) = clients.get_mut(&id) {
+            if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
+                for (xyz, w) in it {
+                    //println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+
+                    // We need the absolute position in the world.
+                    // Y axis is not divided into chunks.
+                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32),
+                               xyz.1 as i32,
+                               xyz.2 as i32 * (ev.q * CHUNK_SIZE as i32));
+                    c.broadcast_block((xyz, w));
+                }
+
+                c.broadcast_redraw((ev.p, ev.q));
             }
         }
     }
