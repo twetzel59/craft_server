@@ -230,13 +230,13 @@ impl EventThread {
         if let Some(c) = clients.get_mut(&id) {
             if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
                 for (xyz, w) in it {
-                    //println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+                    println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
 
                     // We need the absolute position in the world.
                     // Y axis is not divided into chunks.
                     let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32),
                                xyz.1 as i32,
-                               xyz.2 as i32 * (ev.q * CHUNK_SIZE as i32));
+                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32));
                     c.broadcast_block((xyz, w));
                 }
 

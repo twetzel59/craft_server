@@ -200,7 +200,7 @@ impl Client {
         let (p, q) = (chunked((block.0).0), chunked((block.0).2));
 
         // We are sending a block with B,p,q,x,y,z,w.
-        let msg = format!("B,{},{},{},{},{},{}",
+        let msg = format!("B,{},{},{},{},{},{}\n",
                           p, q,
                           (block.0).0.to_string(),
                           (block.0).1.to_string(),
