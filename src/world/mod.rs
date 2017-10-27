@@ -14,7 +14,7 @@ pub const CHUNK_SIZE: u8 = 32;
 
 /// Type of block IDs.
 #[derive(Debug)]
-pub struct Block(pub u8);
+pub struct Block(pub i8);
 
 /* /// A structure representing a sector of the world.
 pub */
@@ -144,7 +144,7 @@ impl World {
             let (xyz, w) = ((record[0].as_integer().unwrap() as i32,
                              record[1].as_integer().unwrap() as i32,
                              record[2].as_integer().unwrap() as i32),
-                             record[3].as_integer().unwrap() as u8);
+                             record[3].as_integer().unwrap() as i8);
 
             //println!("values: ({}, {}, {}): {}", x, y, z, w);
             self.chunk_mgr.set_block(xyz, Block(w));

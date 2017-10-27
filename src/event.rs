@@ -151,7 +151,7 @@ pub struct BlockEvent {
     pub x: i32,
     pub y: i32,
     pub z: i32,
-    pub w: u8,
+    pub w: i8,
 }
 
 impl BlockEvent {
