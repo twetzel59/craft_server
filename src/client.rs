@@ -166,7 +166,7 @@ impl Client {
 
     /// Tells the client that a block has changed.
     pub fn send_block(&mut self, ev: &BlockEvent) {
-        self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)));
+        self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)), (0, 0));
     }
 
     /// Notifies the client that another client has left.
@@ -196,8 +196,9 @@ impl Client {
         let _ = self.send_stream.write_all(msg.as_bytes());
     }
 
-    pub fn broadcast_block(&mut self, block: ((i32, i32, i32), &Block)) {
-        let (p, q) = (chunked((block.0).0), chunked((block.0).2));
+    /// Sends a block change without an event.
+    pub fn broadcast_block(&mut self, block: ((i32, i32, i32), &Block), pq_delta: (i32, i32)) {
+        let (p, q) = (chunked((block.0).0) + pq_delta.0, chunked((block.0).2) + pq_delta.1);
 
         // We are sending a block with B,p,q,x,y,z,w.
         let msg = format!("B,{},{},{},{},{},{}\n",
@@ -212,6 +213,7 @@ impl Client {
         let _ = self.send_stream.write_all(msg.as_bytes());
     }
 
+    /// Informs a client that a chunk needs to be redrawn.
     pub fn broadcast_redraw(&mut self, chunk: (i32, i32)) {
         let msg = format!("R,{},{}\n", chunk.0, chunk.1);
         //println!("will send: {}", msg);

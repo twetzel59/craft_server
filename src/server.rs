@@ -154,7 +154,7 @@ impl EventThread {
                         },
                         Event::Block(b) => {
                             println!("{:?}", b);
-                            self.handle_block_event(ev.id, b);
+                            self.handle_block_event(b);
                         }
                         Event::ChunkRequest(c) => {
                             println!("{:?}", c);
@@ -209,15 +209,38 @@ impl EventThread {
         }
     }
 
-    fn handle_block_event(&mut self, id: client::Id, ev: BlockEvent) {
+    fn handle_block_event(&mut self, ev: BlockEvent) {
         use world::chunked;
 
-        self.world.set_block((ev.x, ev.y, ev.z), Block(ev.w));
+        let (p, q) = (chunked(ev.x), chunked(ev.z));
+
+        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
 
         for i in self.clients.lock().unwrap().iter_mut() {
-            if *i.0 != id {
-                i.1.send_block(&ev);
-                i.1.broadcast_redraw((chunked(ev.x), chunked(ev.z)));
+            i.1.send_block(&ev);
+            i.1.broadcast_redraw((p, q));
+
+            // Craft overlaps chunks by 2 blocks.
+            // ______________
+            // |    #|#     |
+            // | 0  #|#  1  |
+            // |____#|#____ |
+            //
+            // We must update adjacent chunks as well if the new block
+            // lies on this line.
+
+            for dx in -1..2 {
+                for dz in -1..2 {
+                    if      (dx == 0 && dz == 0) ||
+                            (dx != 0 && chunked(ev.x + dx) == p) ||
+                            (dz != 0 && chunked(ev.z + dz) == q) {
+                        continue;
+                    }
+
+                    self.world.set_block((ev.x, ev.y, ev.z), (p + dx, q + dz), Block(-ev.w));
+                    i.1.broadcast_block(((ev.x, ev.y, ev.z), &Block(-ev.w)), (dx, dz));
+                    i.1.broadcast_redraw((p + dx, q + dz));
+                }
             }
         }
     }
@@ -237,7 +260,7 @@ impl EventThread {
                     let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32),
                                xyz.1 as i32,
                                xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32));
-                    c.broadcast_block((xyz, w));
+                    c.broadcast_block((xyz, w), (0, 0));
                 }
 
                 c.broadcast_redraw((ev.p, ev.q));

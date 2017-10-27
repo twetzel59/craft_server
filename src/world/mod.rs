@@ -55,17 +55,17 @@ impl ChunkManager {
         }
     }
 
-    fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
+    fn set_block(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), block: Block) {
         // P and Q are chunk/sector x and z.
-        let (p, q) = (chunked(global_pos.0), chunked(global_pos.2));
+        //let (p, q) = (chunked(global_pos.0), chunked(global_pos.2));
 
         //println!("(p, q): {}, {}", p, q);
-        let local_pos = ((global_pos.0 - p * CHUNK_SIZE as i32) as u8,
+        let local_pos = ((global_pos.0 - pq.0 * CHUNK_SIZE as i32) as u8,
                           global_pos.1 as u8,
-                         (global_pos.2 - q * CHUNK_SIZE as i32) as u8);
+                         (global_pos.2 - pq.1 * CHUNK_SIZE as i32) as u8);
 
         {
-            let entry = self.chunks.entry((p, q));
+            let entry = self.chunks.entry(pq);
             let chunk = entry.or_insert(Chunk::new());
             chunk.set_block(local_pos, block);
         }
@@ -84,6 +84,12 @@ impl ChunkManager {
             self.chunks.insert((p, q), c);
         }
         */
+
+        print!("chunks: ");
+        for i in self.chunks.keys() {
+            print!("{:?}, ", i);
+        }
+        println!();
     }
 
     fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {
@@ -121,9 +127,10 @@ impl World {
         w
     }
 
-    /// Set a block in the world with the given global coordinates.
-    pub fn set_block(&mut self, global_pos: (i32, i32, i32), block: Block) {
-        self.chunk_mgr.set_block(global_pos, block);
+    /// Set a block in the world with the given global coordinates. The chunk is set
+    /// manually to avoid troubles with chunk borders.
+    pub fn set_block(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), block: Block) {
+        self.chunk_mgr.set_block(global_pos, pq, block);
     }
 
     pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
@@ -147,7 +154,7 @@ impl World {
                              record[3].as_integer().unwrap() as i8);
 
             //println!("values: ({}, {}, {}): {}", x, y, z, w);
-            self.chunk_mgr.set_block(xyz, Block(w));
+            self.chunk_mgr.set_block(xyz, (chunked(xyz.0), chunked(xyz.1)), Block(w));
         }
     }
 }
