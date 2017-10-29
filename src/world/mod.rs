@@ -150,13 +150,15 @@ impl World {
         let mut cursor = self.conn.prepare(queries::LOAD_BLOCKS).unwrap().cursor();
 
         while let Some(record) = cursor.next().unwrap() {
-            let (xyz, w) = ((record[0].as_integer().unwrap() as i32,
-                             record[1].as_integer().unwrap() as i32,
-                             record[2].as_integer().unwrap() as i32),
-                             record[3].as_integer().unwrap() as i8);
+            let (pq, xyz, w) = ((record[0].as_integer().unwrap() as i32,
+                                 record[1].as_integer().unwrap() as i32),
+                                (record[2].as_integer().unwrap() as i32,
+                                 record[3].as_integer().unwrap() as i32,
+                                 record[4].as_integer().unwrap() as i32),
+                                 record[5].as_integer().unwrap() as i8);
 
             //println!("values: ({}, {}, {}): {}", x, y, z, w);
-            self.chunk_mgr.set_block(xyz, (chunked(xyz.0), chunked(xyz.1)), Block(w));
+            self.chunk_mgr.set_block(xyz, pq, Block(w));
         }
     }
 }

@@ -13,4 +13,4 @@ pub const INITIAL: &str =
     block (p, q, x, y, z);"
 ;
 
-pub const LOAD_BLOCKS: &str = "SELECT x, y, z, w FROM block";
+pub const LOAD_BLOCKS: &str = "SELECT p, q, x, y, z, w FROM block";
