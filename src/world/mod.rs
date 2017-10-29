@@ -7,13 +7,15 @@ const FILE: &str = "world.db";
 
 use std::collections::hash_map;
 use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
 use sqlite::{self, Connection};
 
 /// The square X and Z dimensions of a world sector.
 pub const CHUNK_SIZE: u8 = 32;
 
 /// Type of block IDs.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Block(pub i8);
 
 /* /// A structure representing a sector of the world.
@@ -101,8 +103,8 @@ impl ChunkManager {
 
 /// Manages a world and the SQLite connection to persist it on disk.
 pub struct World {
-    conn: Connection,
     chunk_mgr: ChunkManager,
+    tx: mpsc::Sender<DatabaseCommand>,
 }
 
 impl World {
@@ -115,16 +117,19 @@ impl World {
         print!("Loading world... ");
 
         let conn = sqlite::open(FILE).unwrap();
+        let channel = mpsc::channel();
 
         let mut w = World {
-            conn,
             chunk_mgr: ChunkManager::new(),
+            tx: channel.0,
         };
 
-        w.initial_queries();
-        w.load_blocks();
+        w.initial_queries(&conn);
+        w.load_blocks(&conn);
 
         println!("OK");
+
+        DatabaseThread::run(conn, channel.1);
 
         w
     }
@@ -132,7 +137,12 @@ impl World {
     /// Set a block in the world with the given global coordinates. The chunk is set
     /// manually to avoid troubles with chunk borders.
     pub fn set_block(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), block: Block) {
-        self.chunk_mgr.set_block(global_pos, pq, block);
+        self.chunk_mgr.set_block(global_pos, pq, block.clone());
+        self.tx.send(DatabaseCommand::SetBlock(SetBlockCommand {
+            xyz: global_pos,
+            pq,
+            block,
+        })).unwrap();
     }
 
     pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
@@ -142,12 +152,12 @@ impl World {
         }
     }
 
-    fn initial_queries(&self) {
-        self.conn.execute(queries::INITIAL).unwrap();
+    fn initial_queries(&self, conn: &Connection) {
+        conn.execute(queries::INITIAL).unwrap();
     }
 
-    fn load_blocks(&mut self) {
-        let mut cursor = self.conn.prepare(queries::LOAD_BLOCKS).unwrap().cursor();
+    fn load_blocks(&mut self, conn: &Connection) {
+        let mut cursor = conn.prepare(queries::LOAD_BLOCKS).unwrap().cursor();
 
         while let Some(record) = cursor.next().unwrap() {
             let (pq, xyz, w) = ((record[0].as_integer().unwrap() as i32,
@@ -160,6 +170,71 @@ impl World {
             //println!("values: ({}, {}, {}): {}", x, y, z, w);
             self.chunk_mgr.set_block(xyz, pq, Block(w));
         }
+    }
+}
+
+struct SetBlockCommand {
+    pub xyz: (i32, i32, i32),
+    pub pq: (i32, i32),
+    pub block: Block,
+}
+
+enum DatabaseCommand {
+    SetBlock(SetBlockCommand),
+}
+
+struct DatabaseThread {
+    conn: Connection,
+    rx: mpsc::Receiver<DatabaseCommand>,
+}
+
+impl DatabaseThread {
+    fn run(conn: Connection, rx: mpsc::Receiver<DatabaseCommand>) {
+        let d = DatabaseThread {
+            conn,
+            rx,
+        };
+
+        d.database_thread();
+    }
+
+    fn database_thread(self) {
+        use std::time::Duration;
+
+        thread::spawn(move || {
+            loop {
+                let mut changed = false;
+
+                while let Ok(cmd) = self.rx.try_recv() {
+                    changed = true;
+
+                    match cmd {
+                        DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
+                    }
+                }
+
+                if changed {
+                    //self.conn.execute(queries::COMMIT).unwrap();
+                    println!("Saved the world.");
+                }
+
+                thread::sleep(Duration::from_secs(5));
+            }
+        });
+    }
+
+    fn handle_set_block(&self, cmd: &SetBlockCommand) {
+        let query = format!("{}({}, {}, {}, {}, {}, {});",
+                            queries::SET_BLOCK,
+                            cmd.pq.0,
+                            cmd.pq.1,
+                            cmd.xyz.0,
+                            cmd.xyz.1,
+                            cmd.xyz.2,
+                            cmd.block.0);
+
+        self.conn.execute(query).unwrap();
+        //println!("{}", query);
     }
 }
 
