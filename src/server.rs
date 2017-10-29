@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use nick::NickManager;
+use world::{Block, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -24,6 +25,7 @@ pub struct Server {
     channel: (mpsc::Sender<IdEvent>, mpsc::Receiver<IdEvent>),
     nicks: Arc<Mutex<NickManager>>,
     daytime: ServerTime,
+    world: World,
 }
 
 impl Server {
@@ -39,15 +41,20 @@ impl Server {
             nicks: Arc::new(Mutex::new(NickManager::new())),
             daytime: ServerTime {
                         from: Instant::now(),
-                        offset: Duration::new(DAY_LENGTH as u64 / 2, 0)
+                        offset: Duration::new(DAY_LENGTH as u64 / 2, 0),
             },
+            world: World::new(),
         };
 
         s.listener();
     }
 
     fn listener(mut self) {
-        EventThread::run(self.channel.1, self.clients.clone(), self.disconnects.0, self.nicks.clone());
+        EventThread::run(self.channel.1,
+                         self.clients.clone(),
+                         self.disconnects.0,
+                         self.world,
+                         self.nicks.clone());
 
         //let mut all_positions = Vec::new();
         for i in self.listener.incoming() {
@@ -94,6 +101,7 @@ struct EventThread {
     rx: mpsc::Receiver<IdEvent>,
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     disconnects: mpsc::Sender<client::Id>,
+    world: World,
     //nicks: Arc<Mutex<NickManager>>,
     command: CommandHandler,
 }
@@ -102,6 +110,7 @@ impl EventThread {
     fn run(rx: mpsc::Receiver<IdEvent>,
            clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
            disconnects: mpsc::Sender<client::Id>,
+           world: World,
            nicks: Arc<Mutex<NickManager>>) {
         let command = CommandHandler::new(clients.clone(), nicks);
 
@@ -109,6 +118,7 @@ impl EventThread {
             rx,
             clients,
             disconnects,
+            world,
             //nicks,
             command,
         };
@@ -142,6 +152,14 @@ impl EventThread {
                                 self.handle_talk_event(ev.id, t);
                             }
                         },
+                        Event::Block(b) => {
+                            println!("{:?}", b);
+                            self.handle_block_event(b);
+                        }
+                        Event::ChunkRequest(c) => {
+                            println!("{:?}", c);
+                            self.handle_chunk_event(ev.id, c);
+                        }
                     }
                 }
             }
@@ -188,6 +206,69 @@ impl EventThread {
 
         for i in clients.iter_mut() {
             i.1.send_talk(&ev);
+        }
+    }
+
+    fn handle_block_event(&mut self, ev: BlockEvent) {
+        use world::chunked;
+
+        let (p, q) = (chunked(ev.x), chunked(ev.z));
+
+        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
+
+        let mut clients = self.clients.lock().unwrap();
+
+        for i in clients.values_mut() {
+            i.send_block(&ev);
+            i.broadcast_redraw((p, q));
+        }
+
+        // Craft overlaps chunks by 2 blocks.
+        // ______________
+        // |    #|#     |
+        // | 0  #|#  1  |
+        // |____#|#____ |
+        //
+        // We must update adjacent chunks as well if the new block
+        // lies on this line.
+
+        for dx in -1..2 {
+            for dz in -1..2 {
+                if      (dx == 0 && dz == 0) ||
+                        (dx != 0 && chunked(ev.x + dx) == p) ||
+                        (dz != 0 && chunked(ev.z + dz) == q) {
+                    continue;
+                }
+
+                self.world.set_block((ev.x, ev.y, ev.z), (p + dx, q + dz), Block(-ev.w));
+                for i in clients.values_mut() {
+                    i.broadcast_block(((ev.x, ev.y, ev.z), &Block(-ev.w)), (p + dx, q + dz));
+                    i.broadcast_redraw((p + dx, q + dz));
+                }
+            }
+        }
+    }
+
+    fn handle_chunk_event(&self, id: client::Id, ev: ChunkRequestEvent) {
+        use world::CHUNK_SIZE;
+
+        let mut clients = self.clients.lock().unwrap();
+
+        if let Some(c) = clients.get_mut(&id) {
+            if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
+                for (xyz, w) in it {
+                    println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+
+                    // We need the absolute position in the world.
+                    // Y axis is not divided into chunks.
+                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32) - 1,
+                               xyz.1 as i32,
+                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
+                    c.broadcast_block((xyz, w), (ev.p, ev.q));
+                }
+
+                c.broadcast_redraw((ev.p, ev.q));
+            }
         }
     }
 }

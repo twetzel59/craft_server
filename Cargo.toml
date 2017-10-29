@@ -13,3 +13,4 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+sqlite = "0.23.9"
