@@ -166,7 +166,7 @@ impl Client {
 
     /// Tells the client that a block has changed.
     pub fn send_block(&mut self, ev: &BlockEvent) {
-        self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)), (0, 0));
+        self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)), (chunked(ev.x), chunked(ev.z)));
     }
 
     /// Notifies the client that another client has left.
@@ -197,12 +197,10 @@ impl Client {
     }
 
     /// Sends a block change without an event.
-    pub fn broadcast_block(&mut self, block: ((i32, i32, i32), &Block), pq_delta: (i32, i32)) {
-        let (p, q) = (chunked((block.0).0) + pq_delta.0, chunked((block.0).2) + pq_delta.1);
-
+    pub fn broadcast_block(&mut self, block: ((i32, i32, i32), &Block), pq: (i32, i32)) {
         // We are sending a block with B,p,q,x,y,z,w.
         let msg = format!("B,{},{},{},{},{},{}\n",
-                          p, q,
+                          pq.0, pq.1,
                           (block.0).0.to_string(),
                           (block.0).1.to_string(),
                           (block.0).2.to_string(),

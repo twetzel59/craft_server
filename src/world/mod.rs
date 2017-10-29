@@ -60,15 +60,15 @@ impl ChunkManager {
         //let (p, q) = (chunked(global_pos.0), chunked(global_pos.2));
 
         //println!("(p, q): {}, {}", p, q);
-        let local_pos = ((global_pos.0 - pq.0 * CHUNK_SIZE as i32) as u8,
+        let local_pos = ((global_pos.0 - pq.0 * CHUNK_SIZE as i32 + 1) as u8,
                           global_pos.1 as u8,
-                         (global_pos.2 - pq.1 * CHUNK_SIZE as i32) as u8);
+                         (global_pos.2 - pq.1 * CHUNK_SIZE as i32 + 1) as u8);
+        //println!("local_pos: {:?}", local_pos);
+        //println!("test: {}", (global_pos.0 - pq.0 * CHUNK_SIZE as i32));
 
-        {
-            let entry = self.chunks.entry(pq);
-            let chunk = entry.or_insert(Chunk::new());
-            chunk.set_block(local_pos, block);
-        }
+        let entry = self.chunks.entry(pq);
+        let chunk = entry.or_insert(Chunk::new());
+        chunk.set_block(local_pos, block);
 
         //println!("entire world: {:?}", self.chunks);
         /*
@@ -85,11 +85,13 @@ impl ChunkManager {
         }
         */
 
+        /*
         print!("chunks: ");
         for i in self.chunks.keys() {
             print!("{:?}, ", i);
         }
         println!();
+        */
     }
 
     fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {

@@ -216,30 +216,34 @@ impl EventThread {
 
         self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
 
-        for i in self.clients.lock().unwrap().iter_mut() {
-            i.1.send_block(&ev);
-            i.1.broadcast_redraw((p, q));
+        let mut clients = self.clients.lock().unwrap();
 
-            // Craft overlaps chunks by 2 blocks.
-            // ______________
-            // |    #|#     |
-            // | 0  #|#  1  |
-            // |____#|#____ |
-            //
-            // We must update adjacent chunks as well if the new block
-            // lies on this line.
+        for i in clients.values_mut() {
+            i.send_block(&ev);
+            i.broadcast_redraw((p, q));
+        }
 
-            for dx in -1..2 {
-                for dz in -1..2 {
-                    if      (dx == 0 && dz == 0) ||
-                            (dx != 0 && chunked(ev.x + dx) == p) ||
-                            (dz != 0 && chunked(ev.z + dz) == q) {
-                        continue;
-                    }
+        // Craft overlaps chunks by 2 blocks.
+        // ______________
+        // |    #|#     |
+        // | 0  #|#  1  |
+        // |____#|#____ |
+        //
+        // We must update adjacent chunks as well if the new block
+        // lies on this line.
 
-                    self.world.set_block((ev.x, ev.y, ev.z), (p + dx, q + dz), Block(-ev.w));
-                    i.1.broadcast_block(((ev.x, ev.y, ev.z), &Block(-ev.w)), (dx, dz));
-                    i.1.broadcast_redraw((p + dx, q + dz));
+        for dx in -1..2 {
+            for dz in -1..2 {
+                if      (dx == 0 && dz == 0) ||
+                        (dx != 0 && chunked(ev.x + dx) == p) ||
+                        (dz != 0 && chunked(ev.z + dz) == q) {
+                    continue;
+                }
+
+                self.world.set_block((ev.x, ev.y, ev.z), (p + dx, q + dz), Block(-ev.w));
+                for i in clients.values_mut() {
+                    i.broadcast_block(((ev.x, ev.y, ev.z), &Block(-ev.w)), (p + dx, q + dz));
+                    i.broadcast_redraw((p + dx, q + dz));
                 }
             }
         }
@@ -253,14 +257,14 @@ impl EventThread {
         if let Some(c) = clients.get_mut(&id) {
             if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
                 for (xyz, w) in it {
-                    //println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+                    println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
 
                     // We need the absolute position in the world.
                     // Y axis is not divided into chunks.
-                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32),
+                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32) - 1,
                                xyz.1 as i32,
-                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32));
-                    c.broadcast_block((xyz, w), (0, 0));
+                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
+                    c.broadcast_block((xyz, w), (ev.p, ev.q));
                 }
 
                 c.broadcast_redraw((ev.p, ev.q));
