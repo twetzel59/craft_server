@@ -18,22 +18,34 @@ pub const CHUNK_SIZE: u8 = 32;
 #[derive(Clone, Debug)]
 pub struct Block(pub i8);
 
+/// Type of Craft signs.
+#[derive(Clone, Debug)]
+pub struct Sign(pub String);
+
 /* /// A structure representing a sector of the world.
 pub */
 #[derive(Debug)]
 struct Chunk {
     blocks: HashMap<(u8, u8, u8), Block>,
+    signs: HashMap<(i32, i32, i32, u8), Sign>,
 }
 
 impl Chunk {
     fn new() -> Chunk {
         Chunk {
             blocks: HashMap::new(),
+            signs: HashMap::new(),
         }
     }
 
     fn set_block(&mut self, local_pos: (u8, u8, u8), block: Block) {
         self.blocks.insert(local_pos, block);
+    }
+
+    fn set_sign(&mut self, global_pos: (i32, i32, i32), face: u8, sign: Sign) {
+        let key = (global_pos.0, global_pos.1, global_pos.2, face);
+
+        self.signs.insert(key, sign);
     }
 }
 
@@ -96,6 +108,14 @@ impl ChunkManager {
         */
     }
 
+    fn set_sign(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), face: u8, sign: Sign) {
+        let entry = self.chunks.entry(pq);
+        let chunk = entry.or_insert(Chunk::new());
+        chunk.set_sign(global_pos, face, sign);
+
+        //println!("all blocks and signs: {:?}", self.chunks);
+    }
+
     fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {
         self.chunks.get(&pq)
     }
@@ -126,6 +146,7 @@ impl World {
 
         w.initial_queries(&conn);
         w.load_blocks(&conn);
+        w.load_signs(&conn);
 
         println!("OK");
 
@@ -142,6 +163,16 @@ impl World {
             xyz: global_pos,
             pq,
             block,
+        })).unwrap();
+    }
+
+    /// Set a sign in the world using absolute world coordinates and chunk coordinates.
+    pub fn set_sign(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), face: u8, sign: Sign) {
+        self.chunk_mgr.set_sign(global_pos, pq, face, sign.clone());
+        self.tx.send(DatabaseCommand::SetSign(SetSignCommand {
+            xyz: global_pos,
+            face,
+            sign,
         })).unwrap();
     }
 
@@ -171,6 +202,22 @@ impl World {
             self.chunk_mgr.set_block(xyz, pq, Block(w));
         }
     }
+
+    fn load_signs(&mut self, conn: &Connection) {
+        let mut cursor = conn.prepare(queries::LOAD_SIGNS).unwrap().cursor();
+
+        while let Some(record) = cursor.next().unwrap() {
+            let (pq, xyz, face, text) = ((record[0].as_integer().unwrap() as i32,
+                                          record[1].as_integer().unwrap() as i32),
+                                         (record[2].as_integer().unwrap() as i32,
+                                          record[3].as_integer().unwrap() as i32,
+                                          record[4].as_integer().unwrap() as i32),
+                                          record[5].as_integer().unwrap() as u8,
+                                          record[6].as_string().unwrap().to_string());
+
+            self.chunk_mgr.set_sign(xyz, pq, face, Sign(text));
+        }
+    }
 }
 
 struct SetBlockCommand {
@@ -179,8 +226,15 @@ struct SetBlockCommand {
     pub block: Block,
 }
 
+struct SetSignCommand {
+    pub xyz: (i32, i32, i32),
+    pub face: u8,
+    pub sign: Sign,
+}
+
 enum DatabaseCommand {
     SetBlock(SetBlockCommand),
+    SetSign(SetSignCommand),
 }
 
 struct DatabaseThread {
@@ -210,6 +264,7 @@ impl DatabaseThread {
 
                     match cmd {
                         DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
+                        DatabaseCommand::SetSign(c) => self.handle_set_sign(&c),
                     }
                 }
 
@@ -235,6 +290,12 @@ impl DatabaseThread {
 
         self.conn.execute(query).unwrap();
         //println!("{}", query);
+    }
+
+    fn handle_set_sign(&self, cmd: &SetSignCommand) {
+        /* TODO */
+
+        println!("TODO");
     }
 }
 
