@@ -255,9 +255,11 @@ impl EventThread {
         let mut clients = self.clients.lock().unwrap();
 
         if let Some(c) = clients.get_mut(&id) {
+            let mut redraw = false;
+
             if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
                 for (xyz, w) in it {
-                    println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+                    //println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
 
                     // We need the absolute position in the world.
                     // Y axis is not divided into chunks.
@@ -265,8 +267,22 @@ impl EventThread {
                                xyz.1 as i32,
                                xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
                     c.broadcast_block((xyz, w), (ev.p, ev.q));
-                }
 
+                    redraw = true;
+                }
+            }
+
+            if let Some(it) = self.world.signs_in_chunk((ev.p, ev.q)) {
+                for (xyz_face, sign) in it {
+                    //println!("SIGN: {}, {}, {}: {}", xyz_face.0, xyz_face.1, xyz_face.2, sign.0);
+
+                    c.broadcast_sign((xyz_face.0, xyz_face.1, xyz_face.2), xyz_face.3, sign);
+
+                    redraw = true;
+                }
+            }
+
+            if redraw {
                 c.broadcast_redraw((ev.p, ev.q));
             }
         }

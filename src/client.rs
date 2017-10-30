@@ -10,7 +10,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
 use server::ServerTime;
-use world::{Block, chunked};
+use world::{Block, chunked, Sign};
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -214,6 +214,19 @@ impl Client {
     /// Informs a client that a chunk needs to be redrawn.
     pub fn broadcast_redraw(&mut self, chunk: (i32, i32)) {
         let msg = format!("R,{},{}\n", chunk.0, chunk.1);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    /// Sends a sign update to the client.
+    pub fn broadcast_sign(&mut self, global_pos: (i32, i32, i32), face: u8, sign: &Sign) {
+        let msg = format!("S,{},{},{},{},{},{},{}\n",
+                          chunked(global_pos.0), chunked(global_pos.2),
+                          global_pos.0, global_pos.1, global_pos.2,
+                          face,
+                          sign.0);
         //println!("will send: {}", msg);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.

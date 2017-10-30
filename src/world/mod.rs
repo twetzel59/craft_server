@@ -47,13 +47,17 @@ impl Chunk {
 
         self.signs.insert(key, sign);
     }
+
+    fn signs(&self) -> hash_map::Iter<(i32, i32, i32, u8), Sign> {
+        self.signs.iter()
+    }
 }
 
 impl<'a> IntoIterator for &'a Chunk {
     type Item = (&'a (u8, u8, u8), &'a Block);
     type IntoIter = hash_map::Iter<'a, (u8, u8, u8), Block>;
 
-    fn into_iter(self) -> hash_map::Iter<'a, (u8, u8, u8), Block> {
+    fn into_iter(self) -> Self::IntoIter {
         self.blocks.iter()
     }
 }
@@ -176,9 +180,18 @@ impl World {
         })).unwrap();
     }
 
+    /// Iterate over the blocks in the chunk with these (P, Q) (as in (X, Z)) coordinates.
     pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
         match self.chunk_mgr.get(chunk) {
             Some(c) => Some(c.into_iter()),
+            None => None,
+        }
+    }
+
+    /// Iterate over the signs in the chunk with these coordinates.
+    pub fn signs_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(i32, i32, i32, u8), Sign>> {
+        match self.chunk_mgr.get(chunk) {
+            Some(c) => Some(c.signs()),
             None => None,
         }
     }
