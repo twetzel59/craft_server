@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
 use nick::NickManager;
-use world::{Block, World};
+use world::{Block, Sign, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -160,6 +160,10 @@ impl EventThread {
                             println!("{:?}", c);
                             self.handle_chunk_event(ev.id, c);
                         }
+                        Event::Sign(s) => {
+                            println!("{:?}", s);
+                            self.handle_sign_event(s);
+                        }
                     }
                 }
             }
@@ -214,14 +218,14 @@ impl EventThread {
 
         let (p, q) = (chunked(ev.x), chunked(ev.z));
 
-        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
-
         let mut clients = self.clients.lock().unwrap();
 
         for i in clients.values_mut() {
             i.send_block(&ev);
             i.broadcast_redraw((p, q));
         }
+
+        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
 
         // Craft overlaps chunks by 2 blocks.
         // ______________
@@ -286,6 +290,19 @@ impl EventThread {
                 c.broadcast_redraw((ev.p, ev.q));
             }
         }
+    }
+
+    fn handle_sign_event(&mut self, ev: SignEvent) {
+        use world::chunked;
+
+        let chunk = (chunked(ev.x), chunked(ev.z));
+
+        for i in self.clients.lock().unwrap().values_mut() {
+            i.send_sign(&ev);
+            i.broadcast_redraw(chunk);
+        }
+
+        self.world.set_sign((ev.x, ev.y, ev.z), chunk, ev.face, Sign(ev.text));
     }
 }
 

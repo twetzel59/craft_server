@@ -8,7 +8,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 //use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
 use server::ServerTime;
 use world::{Block, chunked, Sign};
 
@@ -172,6 +172,22 @@ impl Client {
     /// Notifies the client that another client has left.
     pub fn send_disconnect(&mut self, other_id: Id) {
         let msg = format!("D,{}\n", other_id);
+        //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    /// Notifies a client that a sign has changed in the world.
+    pub fn send_sign(&mut self, ev: &SignEvent) {
+        let msg = format!("S,{},{},{},{},{},{},{}\n",
+                          chunked(ev.x),
+                          chunked(ev.z),
+                          ev.x,
+                          ev.y,
+                          ev.z,
+                          ev.face,
+                          ev.text);
         //println!("will send: {}", msg);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.
@@ -358,6 +374,8 @@ impl ClientThread {
             self.handle_block(payload);
         } else if msg.starts_with('C') {
             self.handle_chunk(payload);
+        } else if msg.starts_with('S') {
+            self.handle_sign(payload);
         }
     }
 
@@ -386,6 +404,12 @@ impl ClientThread {
     fn handle_chunk(&self, payload: &str) {
         if let Ok(ev) = ChunkRequestEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::ChunkRequest(ev) }).unwrap();
+        }
+    }
+
+    fn handle_sign(&self, payload: &str) {
+        if let Ok(ev) = SignEvent::new(payload) {
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Sign(ev) }).unwrap();
         }
     }
 }

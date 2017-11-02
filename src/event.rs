@@ -41,6 +41,9 @@ pub enum Event {
 
     /// Represents a request for chunk data from a client.
     ChunkRequest(ChunkRequestEvent),
+
+    /// Represents a sign added on a client.
+    Sign(SignEvent),
 }
 
 /// Describes errors that occur parsing messages.
@@ -233,5 +236,55 @@ impl ChunkRequestEvent {
 
     fn warn_invalid() {
         println!("Warning: invalid chunk data request packet.");
+    }
+}
+
+/// Corresponds to `S` sign place messages.
+#[derive(Debug)]
+pub struct SignEvent {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub face: u8,
+    pub text: String,
+}
+
+impl SignEvent {
+    /// Create a new sign event information structure from an encoded payload.
+    pub fn new(payload: &str) -> Result<SignEvent, MessageParseError> {
+        let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
+
+        if pieces.len() != 5 {
+            Self::warn_invalid();
+            return Err(MessageParseError::InvalidLength);
+        }
+
+        match Self::parse_all(&pieces) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                Self::warn_invalid();
+                Err(MessageParseError::IntError(e))
+            },
+        }
+    }
+
+    fn parse_all(pieces: &Vec<&str>) -> Result<SignEvent, ParseIntError> {
+        let x    = pieces[0].parse()?;
+        let y    = pieces[1].parse()?;
+        let z    = pieces[2].parse()?;
+        let face = pieces[3].parse()?;
+        let text = pieces[4].to_string();
+
+        Ok(SignEvent {
+            x,
+            y,
+            z,
+            face,
+            text,
+        })
+    }
+
+    fn warn_invalid() {
+        println!("Warning: invalid sign packet.");
     }
 }
