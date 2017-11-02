@@ -36,6 +36,14 @@ pub const SET_BLOCK: &str = "INSERT OR REPLACE INTO block (p, q, x, y, z, w) VAL
 /// Loads signs from the database.
 pub const LOAD_SIGNS: &str = "SELECT p, q, x, y, z, face, text FROM sign";
 
+/// The first part of the query for storing signs.
+/// Actual values must be appended.
+pub const SET_SIGN: &str = "INSERT OR REPLACE INTO sign (p, q, x, y, z, face, text) VALUES ";
+
+/// The first part of the query for deleting signs.
+/// Actual values must be appended.
+pub const DELETE_SIGN: &str = "DELETE FROM sign WHERE ";
+
 /*
 // Needed for vanilla Craft, even though signs
 // are not yet implemented for this server.

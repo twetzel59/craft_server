@@ -292,23 +292,55 @@ impl DatabaseThread {
     }
 
     fn handle_set_block(&self, cmd: &SetBlockCommand) {
-        let query = format!("{}({}, {}, {}, {}, {}, {});",
+        let query = format!("{}({}, {}, {}, {}, {}, {});
+                            {} p = {} AND q = {} AND x = {} AND y = {} AND z = {};",
+
                             queries::SET_BLOCK,
                             cmd.pq.0,
                             cmd.pq.1,
                             cmd.xyz.0,
                             cmd.xyz.1,
                             cmd.xyz.2,
-                            cmd.block.0);
+                            cmd.block.0,
+
+                            queries::DELETE_SIGN,
+                            cmd.pq.0,
+                            cmd.pq.1,
+                            cmd.xyz.0,
+                            cmd.xyz.1,
+                            cmd.xyz.2);
 
         self.conn.execute(query).unwrap();
         //println!("{}", query);
     }
 
     fn handle_set_sign(&self, cmd: &SetSignCommand) {
-        /* TODO */
+        let pq = (chunked(cmd.xyz.0), chunked(cmd.xyz.2));
 
-        println!("TODO");
+        let query = if cmd.sign.0 == "" {
+            println!("delete!");
+
+            format!("{} p = {} AND q = {} AND x = {} AND y = {} AND z = {} AND face = {};",
+                    queries::DELETE_SIGN,
+                    pq.0,
+                    pq.1,
+                    cmd.xyz.0,
+                    cmd.xyz.1,
+                    cmd.xyz.2,
+                    cmd.face)
+        } else {
+            format!("{}({}, {}, {}, {}, {}, {}, \"{}\");",
+                    queries::SET_SIGN,
+                    pq.0,
+                    pq.1,
+                    cmd.xyz.0,
+                    cmd.xyz.1,
+                    cmd.xyz.2,
+                    cmd.face,
+                    cmd.sign.0)
+        };
+
+        self.conn.execute(query).unwrap();
     }
 }
 
