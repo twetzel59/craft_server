@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
 use nick::NickManager;
-use world::{Block, World};
+use world::{Block, Sign, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -160,6 +160,10 @@ impl EventThread {
                             println!("{:?}", c);
                             self.handle_chunk_event(ev.id, c);
                         }
+                        Event::Sign(s) => {
+                            println!("{:?}", s);
+                            self.handle_sign_event(s);
+                        }
                     }
                 }
             }
@@ -214,14 +218,14 @@ impl EventThread {
 
         let (p, q) = (chunked(ev.x), chunked(ev.z));
 
-        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
-
         let mut clients = self.clients.lock().unwrap();
 
         for i in clients.values_mut() {
             i.send_block(&ev);
             i.broadcast_redraw((p, q));
         }
+
+        self.world.set_block((ev.x, ev.y, ev.z), (p, q), Block(ev.w));
 
         // Craft overlaps chunks by 2 blocks.
         // ______________
@@ -255,9 +259,11 @@ impl EventThread {
         let mut clients = self.clients.lock().unwrap();
 
         if let Some(c) = clients.get_mut(&id) {
+            let mut redraw = false;
+
             if let Some(it) = self.world.blocks_in_chunk((ev.p, ev.q)) {
                 for (xyz, w) in it {
-                    println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
+                    //println!("BLOCK: {}, {}, {}: {:?}", xyz.0, xyz.1, xyz.2, w);
 
                     // We need the absolute position in the world.
                     // Y axis is not divided into chunks.
@@ -265,11 +271,38 @@ impl EventThread {
                                xyz.1 as i32,
                                xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
                     c.broadcast_block((xyz, w), (ev.p, ev.q));
-                }
 
+                    redraw = true;
+                }
+            }
+
+            if let Some(it) = self.world.signs_in_chunk((ev.p, ev.q)) {
+                for (xyz_face, sign) in it {
+                    //println!("SIGN: {}, {}, {}: {}", xyz_face.0, xyz_face.1, xyz_face.2, sign.0);
+
+                    c.broadcast_sign((xyz_face.0, xyz_face.1, xyz_face.2), xyz_face.3, sign);
+
+                    redraw = true;
+                }
+            }
+
+            if redraw {
                 c.broadcast_redraw((ev.p, ev.q));
             }
         }
+    }
+
+    fn handle_sign_event(&mut self, ev: SignEvent) {
+        use world::chunked;
+
+        let chunk = (chunked(ev.x), chunked(ev.z));
+
+        for i in self.clients.lock().unwrap().values_mut() {
+            i.send_sign(&ev);
+            i.broadcast_redraw(chunk);
+        }
+
+        self.world.set_sign((ev.x, ev.y, ev.z), chunk, ev.face, Sign(ev.text));
     }
 }
 

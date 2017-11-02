@@ -11,7 +11,19 @@ pub const INITIAL: &str =
     z INT NOT NULL, \
     w INT NOT NULL); \
     CREATE UNIQUE INDEX IF NOT EXISTS block_pqxyz_idx ON \
-    block (p, q, x, y, z);"
+    block (p, q, x, y, z); \
+    CREATE TABLE IF NOT EXISTS sign (\
+    p INT NOT NULL, \
+    q INT NOT NULL, \
+    x INT NOT NULL, \
+    y INT NOT NULL, \
+    z INT NOT NULL, \
+    face INT NOT NULL, \
+    text TEXT NOT NULL); \
+    CREATE INDEX IF NOT EXISTS sign_pq_idx ON \
+    sign (p, q); \
+    CREATE UNIQUE INDEX IF NOT EXISTS sign_xyzface_idx ON \
+    sign (x, y, z, face);"
 ;
 
 /// Loads blocks from the database.
@@ -20,6 +32,17 @@ pub const LOAD_BLOCKS: &str = "SELECT p, q, x, y, z, w FROM block";
 /// The first part of the query for saving blocks.
 /// Actual values must be appended.
 pub const SET_BLOCK: &str = "INSERT OR REPLACE INTO block (p, q, x, y, z, w) VALUES ";
+
+/// Loads signs from the database.
+pub const LOAD_SIGNS: &str = "SELECT p, q, x, y, z, face, text FROM sign";
+
+/// The first part of the query for storing signs.
+/// Actual values must be appended.
+pub const SET_SIGN: &str = "INSERT OR REPLACE INTO sign (p, q, x, y, z, face, text) VALUES ";
+
+/// The first part of the query for deleting signs.
+/// Actual values must be appended.
+pub const DELETE_SIGN: &str = "DELETE FROM sign WHERE ";
 
 /*
 // Needed for vanilla Craft, even though signs
