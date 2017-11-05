@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent,
+            LightEvent, SignEvent, TalkEvent};
 use nick::NickManager;
-use world::{Block, Sign, World};
+use world::{Block, Light, Sign, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -144,6 +145,10 @@ impl EventThread {
                         Event::Sign(s) => {
                             println!("{:?}", s);
                             self.handle_sign_event(s);
+                        }
+                        Event::Light(l) => {
+                            println!("{:?}", l);
+                            self.handle_light_event(l);
                         }
                     }
                 }
@@ -295,6 +300,21 @@ impl EventThread {
         }
 
         self.world.set_sign((ev.x, ev.y, ev.z), chunk, ev.face, Sign(ev.text));
+    }
+
+    fn handle_light_event(&mut self, ev: LightEvent) {
+        use world::chunked;
+
+        let (p, q) = (chunked(ev.x), chunked(ev.z));
+
+        let mut clients = self.clients.lock().unwrap();
+
+        for i in clients.values_mut() {
+            i.send_light(&ev);
+            i.broadcast_redraw((p, q));
+        }
+
+        self.world.set_light((ev.x, ev.y, ev.z), (p, q), Light(ev.w));
     }
 }
 

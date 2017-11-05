@@ -6,7 +6,8 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent,
+            LightEvent, SignEvent, TalkEvent};
 use server::ServerTime;
 use world::{Block, chunked, Light, Sign};
 
@@ -115,6 +116,11 @@ impl Client {
     /// Tells the client that a block has changed.
     pub fn send_block(&mut self, ev: &BlockEvent) {
         self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)), (chunked(ev.x), chunked(ev.z)));
+    }
+
+    /// Tells the client that a light has changed.
+    pub fn send_light(&mut self, ev: &LightEvent) {
+        self.broadcast_light(((ev.x, ev.y, ev.z), &Light(ev.w)), (chunked(ev.x), chunked(ev.z)));
     }
 
     /// Notifies the client that another client has left.
@@ -329,6 +335,8 @@ impl ClientThread {
             self.handle_chunk(payload);
         } else if msg.starts_with('S') {
             self.handle_sign(payload);
+        } else if msg.starts_with('L') {
+            self.handle_light(payload);
         }
     }
 
@@ -359,6 +367,12 @@ impl ClientThread {
     fn handle_sign(&self, payload: &str) {
         if let Ok(ev) = SignEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Sign(ev) }).unwrap();
+        }
+    }
+
+    fn handle_light(&self, payload: &str) {
+        if let Ok(ev) = LightEvent::new(payload) {
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Light(ev) }).unwrap();
         }
     }
 }

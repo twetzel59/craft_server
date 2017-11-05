@@ -212,6 +212,16 @@ impl World {
         })).unwrap();
     }
 
+    /// Set a light in the world using absolute world coordinates and chunk coordinates.
+    pub fn set_light(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), light: Light) {
+        self.chunk_mgr.set_light(global_pos, pq, light.clone());
+        self.tx.send(DatabaseCommand::SetLight(SetLightCommand {
+            xyz: global_pos,
+            pq,
+            light,
+        })).unwrap();
+    }
+
     /// Iterate over the blocks in the chunk with these (P, Q) (as in (X, Z)) coordinates.
     pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
         match self.chunk_mgr.get(chunk) {
@@ -300,9 +310,16 @@ struct SetSignCommand {
     pub sign: Sign,
 }
 
+struct SetLightCommand {
+    pub xyz: (i32, i32, i32),
+    pub pq: (i32, i32),
+    pub light: Light,
+}
+
 enum DatabaseCommand {
     SetBlock(SetBlockCommand),
     SetSign(SetSignCommand),
+    SetLight(SetLightCommand),
 }
 
 struct DatabaseThread<'l> {
@@ -336,6 +353,7 @@ impl<'l> DatabaseThread<'l> {
                 match cmd {
                     DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
                     DatabaseCommand::SetSign(c) => self.handle_set_sign(&c),
+                    DatabaseCommand::SetLight(c) => self.handle_set_light(&c),
                 }
             }
 
@@ -391,6 +409,10 @@ impl<'l> DatabaseThread<'l> {
             s.0.bind(6, cmd.face as i64).unwrap();
             s.0.bind(7, cmd.sign.0.deref()).unwrap();
         }
+    }
+
+    fn handle_set_light(&mut self, cmd: &SetLightCommand) {
+        
     }
 }
 
