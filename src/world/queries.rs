@@ -27,22 +27,29 @@ pub const INITIAL: &str =
 ;
 
 /// Loads blocks from the database.
-pub const LOAD_BLOCKS: &str = "SELECT p, q, x, y, z, w FROM block";
+pub const LOAD_BLOCKS: &str = "SELECT p, q, x, y, z, w FROM block;";
 
-/// The first part of the query for saving blocks.
-/// Actual values must be appended.
-pub const SET_BLOCK: &str = "INSERT OR REPLACE INTO block (p, q, x, y, z, w) VALUES ";
+/// Sets a block.
+/* pub const SET_BLOCK: &str = "INSERT OR REPLACE INTO block (p, q, x, y, z, w) VALUES "; */
+pub const SET_BLOCK: &str =
+    "INSERT OR REPLACE INTO block (p, q, x, y, z, w) VALUES \
+    (?, ?, ?, ?, ?, ?);";
 
 /// Loads signs from the database.
-pub const LOAD_SIGNS: &str = "SELECT p, q, x, y, z, face, text FROM sign";
+pub const LOAD_SIGNS: &str = "SELECT p, q, x, y, z, face, text FROM sign;";
 
-/// The first part of the query for storing signs.
-/// Actual values must be appended.
-pub const SET_SIGN: &str = "INSERT OR REPLACE INTO sign (p, q, x, y, z, face, text) VALUES ";
+/// Sets a sign.
+/* pub const SET_SIGN: &str = "INSERT OR REPLACE INTO sign (p, q, x, y, z, face, text) VALUES "; */
+pub const SET_SIGN: &str =
+    "INSERT OR REPLACE INTO sign (p, q, x, y, z, face, text) VALUES \
+    (?, ?, ?, ?, ?, ?, ?);";
 
-/// The first part of the query for deleting signs.
-/// Actual values must be appended.
-pub const DELETE_SIGN: &str = "DELETE FROM sign WHERE ";
+/// Deletes a sign on a specific face of a specific block.
+pub const DELETE_INDIVIDUAL_SIGN: &str = "DELETE FROM sign WHERE x = ? and y = ? and z = ? and face = ?";
+
+/// Deletes all signs on a block.
+/* pub const DELETE_SIGN: &str = "DELETE FROM sign WHERE "; */
+pub const DELETE_SIGNS: &str = "DELETE FROM sign WHERE x = ? AND y = ? AND z = ?";
 
 /*
 // Needed for vanilla Craft, even though signs

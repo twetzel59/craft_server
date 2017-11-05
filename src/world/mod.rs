@@ -9,7 +9,7 @@ use std::collections::hash_map;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use sqlite::{self, Connection};
+use sqlite::{self, Connection, Statement};
 
 /// The square X and Z dimensions of a world sector.
 pub const CHUNK_SIZE: u8 = 32;
@@ -17,6 +17,13 @@ pub const CHUNK_SIZE: u8 = 32;
 /// Type of block IDs.
 #[derive(Clone, Debug)]
 pub struct Block(pub i8);
+
+impl Block {
+    /// Returns wheather the block is empty air.
+    pub fn is_air(&self) -> bool {
+        self.0 == 0
+    }
+}
 
 /// Type of Craft signs.
 #[derive(Clone, Debug)]
@@ -250,101 +257,142 @@ enum DatabaseCommand {
     SetSign(SetSignCommand),
 }
 
-struct DatabaseThread {
-    conn: Connection,
+struct DatabaseThread<'l> {
+    _conn: &'l Connection,
+    statements: PreparedStatements<'l>,
     rx: mpsc::Receiver<DatabaseCommand>,
 }
 
-impl DatabaseThread {
+impl<'l> DatabaseThread<'l> {
     fn run(conn: Connection, rx: mpsc::Receiver<DatabaseCommand>) {
-        let d = DatabaseThread {
-            conn,
-            rx,
-        };
-
-        d.database_thread();
-    }
-
-    fn database_thread(self) {
-        use std::time::Duration;
-
         thread::spawn(move || {
-            loop {
-                let mut changed = false;
+            let mut d = DatabaseThread {
+                _conn: &conn,
+                statements: PreparedStatements::new(&conn),
+                rx,
+            };
 
-                while let Ok(cmd) = self.rx.try_recv() {
-                    changed = true;
-
-                    match cmd {
-                        DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
-                        DatabaseCommand::SetSign(c) => self.handle_set_sign(&c),
-                    }
-                }
-
-                if changed {
-                    //self.conn.execute(queries::COMMIT).unwrap();
-                    println!("Saved the world.");
-                }
-
-                thread::sleep(Duration::from_secs(5));
-            }
+            d.database_thread();
         });
     }
 
-    fn handle_set_block(&self, cmd: &SetBlockCommand) {
-        let query = format!("{}({}, {}, {}, {}, {}, {});
-                            {} p = {} AND q = {} AND x = {} AND y = {} AND z = {};",
+    fn database_thread(&mut self) {
+        use std::time::Duration;
 
-                            queries::SET_BLOCK,
-                            cmd.pq.0,
-                            cmd.pq.1,
-                            cmd.xyz.0,
-                            cmd.xyz.1,
-                            cmd.xyz.2,
-                            cmd.block.0,
+        loop {
+            let mut changed = false;
 
-                            queries::DELETE_SIGN,
-                            cmd.pq.0,
-                            cmd.pq.1,
-                            cmd.xyz.0,
-                            cmd.xyz.1,
-                            cmd.xyz.2);
+            while let Ok(cmd) = self.rx.try_recv() {
+                changed = true;
 
-        self.conn.execute(query).unwrap();
-        //println!("{}", query);
+                match cmd {
+                    DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
+                    DatabaseCommand::SetSign(c) => self.handle_set_sign(&c),
+                }
+            }
+
+            if changed {
+                //self.conn.execute(queries::COMMIT).unwrap();
+                println!("Saved the world.");
+            }
+
+            thread::sleep(Duration::from_secs(5));
+        }
     }
 
-    fn handle_set_sign(&self, cmd: &SetSignCommand) {
-        let pq = (chunked(cmd.xyz.0), chunked(cmd.xyz.2));
+    fn handle_set_block(&mut self, cmd: &SetBlockCommand) {
+        {
+            let s = self.statements.set_block();
 
-        let query = if cmd.sign.0 == "" {
-            println!("delete!");
+            s.0.bind(1, cmd.pq.0 as i64).unwrap();
+            s.0.bind(2, cmd.pq.1 as i64).unwrap();
+            s.0.bind(3, cmd.xyz.0 as i64).unwrap();
+            s.0.bind(4, cmd.xyz.1 as i64).unwrap();
+            s.0.bind(5, cmd.xyz.2 as i64).unwrap();
+            s.0.bind(6, cmd.block.0 as i64).unwrap();
+        }
 
-            format!("{} p = {} AND q = {} AND x = {} AND y = {} AND z = {} AND face = {};",
-                    queries::DELETE_SIGN,
-                    pq.0,
-                    pq.1,
-                    cmd.xyz.0,
-                    cmd.xyz.1,
-                    cmd.xyz.2,
-                    cmd.face)
+        if cmd.block.is_air() {
+            let s = self.statements.delete_signs();
+
+            s.0.bind(1, cmd.xyz.0 as i64).unwrap();
+            s.0.bind(2, cmd.xyz.1 as i64).unwrap();
+            s.0.bind(3, cmd.xyz.2 as i64).unwrap();
+        }
+    }
+
+    fn handle_set_sign(&mut self, cmd: &SetSignCommand) {
+        if cmd.sign.0 == "" {
+            let s = self.statements.delete_individual_sign();
+
+            s.0.bind(1, cmd.xyz.0 as i64).unwrap();
+            s.0.bind(2, cmd.xyz.1 as i64).unwrap();
+            s.0.bind(3, cmd.xyz.2 as i64).unwrap();
+            s.0.bind(4, cmd.face as i64).unwrap();
         } else {
-            format!("{}({}, {}, {}, {}, {}, {}, \"{}\");",
-                    queries::SET_SIGN,
-                    pq.0,
-                    pq.1,
-                    cmd.xyz.0,
-                    cmd.xyz.1,
-                    cmd.xyz.2,
-                    cmd.face,
-                    cmd.sign.0)
-        };
+            use ::std::ops::Deref;
 
-        self.conn.execute(query).unwrap();
+            let pq = (chunked(cmd.xyz.0), chunked(cmd.xyz.2));
+            let s = self.statements.set_sign();
+
+            s.0.bind(1, pq.0 as i64).unwrap();
+            s.0.bind(2, pq.1 as i64).unwrap();
+            s.0.bind(3, cmd.xyz.0 as i64).unwrap();
+            s.0.bind(4, cmd.xyz.1 as i64).unwrap();
+            s.0.bind(5, cmd.xyz.2 as i64).unwrap();
+            s.0.bind(6, cmd.face as i64).unwrap();
+            s.0.bind(7, cmd.sign.0.deref()).unwrap();
+        }
     }
 }
 
 /// Return the chunk that a block falls in on one axis.
 pub fn chunked(n: i32) -> i32 {
     (n as f32 / CHUNK_SIZE as f32).floor() as i32
+}
+
+struct PreparedStatements<'l> {
+    set_block: Statement<'l>,
+    set_sign: Statement<'l>,
+    delete_individual_sign: Statement<'l>,
+    delete_signs: Statement<'l>,
+}
+
+impl<'l> PreparedStatements<'l> {
+    fn new(conn: &Connection) -> PreparedStatements {
+        PreparedStatements {
+            set_block: conn.prepare(queries::SET_BLOCK).unwrap(),
+            set_sign: conn.prepare(queries::SET_SIGN).unwrap(),
+            delete_individual_sign: conn.prepare(queries::DELETE_INDIVIDUAL_SIGN).unwrap(),
+            delete_signs: conn.prepare(queries::DELETE_SIGNS).unwrap(),
+        }
+    }
+
+    fn set_block<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.set_block)
+    }
+
+    fn set_sign<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.set_sign)
+    }
+
+    fn delete_individual_sign<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.delete_individual_sign)
+    }
+
+    fn delete_signs<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.delete_signs)
+    }
+}
+
+struct StatementWrapper<'l, 'p>(&'p mut Statement<'l>) where 'l: 'p;
+
+impl<'l, 'p> Drop for StatementWrapper<'l, 'p> {
+    fn drop(&mut self) {
+        use ::sqlite::State;
+
+        while let Ok(State::Row) = self.0.next() {}
+
+        let _ = self.0.reset();
+    }
 }
