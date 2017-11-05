@@ -63,6 +63,11 @@ pub const DELETE_SIGNS: &str = "DELETE FROM sign WHERE x = ? AND y = ? AND z = ?
 /// Loads lights from the database.
 pub const LOAD_LIGHTS: &str = "SELECT p, q, x, y, z, w FROM light;";
 
+/// Sets a light.
+pub const SET_LIGHT: &str =
+    "INSERT OR REPLACE INTO light (p, q, x, y, z, w) VALUES \
+    (?, ?, ?, ?, ?, ?);";
+
 /* /// Commit the database transactions.
 pub const COMMIT: &str = "COMMIT;";
 */

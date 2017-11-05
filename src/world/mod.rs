@@ -412,7 +412,14 @@ impl<'l> DatabaseThread<'l> {
     }
 
     fn handle_set_light(&mut self, cmd: &SetLightCommand) {
-        
+        let s = self.statements.set_light();
+
+        s.0.bind(1, cmd.pq.0 as i64).unwrap();
+        s.0.bind(2, cmd.pq.1 as i64).unwrap();
+        s.0.bind(3, cmd.xyz.0 as i64).unwrap();
+        s.0.bind(4, cmd.xyz.1 as i64).unwrap();
+        s.0.bind(5, cmd.xyz.2 as i64).unwrap();
+        s.0.bind(6, cmd.light.0 as i64).unwrap();
     }
 }
 
@@ -426,6 +433,7 @@ struct PreparedStatements<'l> {
     set_sign: Statement<'l>,
     delete_individual_sign: Statement<'l>,
     delete_signs: Statement<'l>,
+    set_light: Statement<'l>,
 }
 
 impl<'l> PreparedStatements<'l> {
@@ -435,6 +443,7 @@ impl<'l> PreparedStatements<'l> {
             set_sign: conn.prepare(queries::SET_SIGN).unwrap(),
             delete_individual_sign: conn.prepare(queries::DELETE_INDIVIDUAL_SIGN).unwrap(),
             delete_signs: conn.prepare(queries::DELETE_SIGNS).unwrap(),
+            set_light: conn.prepare(queries::SET_LIGHT).unwrap(),
         }
     }
 
@@ -452,6 +461,10 @@ impl<'l> PreparedStatements<'l> {
 
     fn delete_signs<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
         StatementWrapper(&mut self.delete_signs)
+    }
+
+    fn set_light<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.set_light)
     }
 }
 
