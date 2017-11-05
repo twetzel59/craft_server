@@ -29,12 +29,17 @@ impl Block {
 #[derive(Clone, Debug)]
 pub struct Sign(pub String);
 
+/// Type of Craft lights.
+#[derive(Clone, Debug)]
+pub struct Light(pub u8);
+
 /* /// A structure representing a sector of the world.
 pub */
 #[derive(Debug)]
 struct Chunk {
     blocks: HashMap<(u8, u8, u8), Block>,
     signs: HashMap<(i32, i32, i32, u8), Sign>,
+    lights: HashMap<(u8, u8, u8), Light>,
 }
 
 impl Chunk {
@@ -42,6 +47,7 @@ impl Chunk {
         Chunk {
             blocks: HashMap::new(),
             signs: HashMap::new(),
+            lights: HashMap::new(),
         }
     }
 
@@ -55,8 +61,16 @@ impl Chunk {
         self.signs.insert(key, sign);
     }
 
+    fn set_light(&mut self, local_pos: (u8, u8, u8), light: Light) {
+        self.lights.insert(local_pos, light);
+    }
+
     fn signs(&self) -> hash_map::Iter<(i32, i32, i32, u8), Sign> {
         self.signs.iter()
+    }
+
+    fn lights(&self) -> hash_map::Iter<(u8, u8, u8), Light> {
+        self.lights.iter()
     }
 }
 
@@ -127,6 +141,16 @@ impl ChunkManager {
         //println!("all blocks and signs: {:?}", self.chunks);
     }
 
+    fn set_light(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), light: Light) {
+        let local_pos = ((global_pos.0 - pq.0 * CHUNK_SIZE as i32 + 1) as u8,
+                          global_pos.1 as u8,
+                         (global_pos.2 - pq.1 * CHUNK_SIZE as i32 + 1) as u8);
+
+        let entry = self.chunks.entry(pq);
+        let chunk = entry.or_insert(Chunk::new());
+        chunk.set_light(local_pos, light);
+    }
+
     fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {
         self.chunks.get(&pq)
     }
@@ -158,6 +182,7 @@ impl World {
         w.initial_queries(&conn);
         w.load_blocks(&conn);
         w.load_signs(&conn);
+        w.load_lights(&conn);
 
         println!("OK");
 
@@ -187,6 +212,16 @@ impl World {
         })).unwrap();
     }
 
+    /// Set a light in the world using absolute world coordinates and chunk coordinates.
+    pub fn set_light(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), light: Light) {
+        self.chunk_mgr.set_light(global_pos, pq, light.clone());
+        self.tx.send(DatabaseCommand::SetLight(SetLightCommand {
+            xyz: global_pos,
+            pq,
+            light,
+        })).unwrap();
+    }
+
     /// Iterate over the blocks in the chunk with these (P, Q) (as in (X, Z)) coordinates.
     pub fn blocks_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Block>> {
         match self.chunk_mgr.get(chunk) {
@@ -199,6 +234,14 @@ impl World {
     pub fn signs_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(i32, i32, i32, u8), Sign>> {
         match self.chunk_mgr.get(chunk) {
             Some(c) => Some(c.signs()),
+            None => None,
+        }
+    }
+
+    /// Iterate over the lights in the chunk with these coordinates.
+    pub fn lights_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Light>> {
+        match self.chunk_mgr.get(chunk) {
+            Some(c) => Some(c.lights()),
             None => None,
         }
     }
@@ -238,6 +281,21 @@ impl World {
             self.chunk_mgr.set_sign(xyz, pq, face, Sign(text));
         }
     }
+
+    fn load_lights(&mut self, conn: &Connection) {
+        let mut cursor = conn.prepare(queries::LOAD_LIGHTS).unwrap().cursor();
+
+        while let Some(record) = cursor.next().unwrap() {
+            let (pq, xyz, w) = ((record[0].as_integer().unwrap() as i32,
+                                 record[1].as_integer().unwrap() as i32),
+                                (record[2].as_integer().unwrap() as i32,
+                                 record[3].as_integer().unwrap() as i32,
+                                 record[4].as_integer().unwrap() as i32),
+                                 record[5].as_integer().unwrap() as u8);
+
+            self.chunk_mgr.set_light(xyz, pq, Light(w));
+        }
+    }
 }
 
 struct SetBlockCommand {
@@ -252,9 +310,16 @@ struct SetSignCommand {
     pub sign: Sign,
 }
 
+struct SetLightCommand {
+    pub xyz: (i32, i32, i32),
+    pub pq: (i32, i32),
+    pub light: Light,
+}
+
 enum DatabaseCommand {
     SetBlock(SetBlockCommand),
     SetSign(SetSignCommand),
+    SetLight(SetLightCommand),
 }
 
 struct DatabaseThread<'l> {
@@ -288,6 +353,7 @@ impl<'l> DatabaseThread<'l> {
                 match cmd {
                     DatabaseCommand::SetBlock(c) => self.handle_set_block(&c),
                     DatabaseCommand::SetSign(c) => self.handle_set_sign(&c),
+                    DatabaseCommand::SetLight(c) => self.handle_set_light(&c),
                 }
             }
 
@@ -344,6 +410,17 @@ impl<'l> DatabaseThread<'l> {
             s.0.bind(7, cmd.sign.0.deref()).unwrap();
         }
     }
+
+    fn handle_set_light(&mut self, cmd: &SetLightCommand) {
+        let s = self.statements.set_light();
+
+        s.0.bind(1, cmd.pq.0 as i64).unwrap();
+        s.0.bind(2, cmd.pq.1 as i64).unwrap();
+        s.0.bind(3, cmd.xyz.0 as i64).unwrap();
+        s.0.bind(4, cmd.xyz.1 as i64).unwrap();
+        s.0.bind(5, cmd.xyz.2 as i64).unwrap();
+        s.0.bind(6, cmd.light.0 as i64).unwrap();
+    }
 }
 
 /// Return the chunk that a block falls in on one axis.
@@ -356,6 +433,7 @@ struct PreparedStatements<'l> {
     set_sign: Statement<'l>,
     delete_individual_sign: Statement<'l>,
     delete_signs: Statement<'l>,
+    set_light: Statement<'l>,
 }
 
 impl<'l> PreparedStatements<'l> {
@@ -365,6 +443,7 @@ impl<'l> PreparedStatements<'l> {
             set_sign: conn.prepare(queries::SET_SIGN).unwrap(),
             delete_individual_sign: conn.prepare(queries::DELETE_INDIVIDUAL_SIGN).unwrap(),
             delete_signs: conn.prepare(queries::DELETE_SIGNS).unwrap(),
+            set_light: conn.prepare(queries::SET_LIGHT).unwrap(),
         }
     }
 
@@ -382,6 +461,10 @@ impl<'l> PreparedStatements<'l> {
 
     fn delete_signs<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
         StatementWrapper(&mut self.delete_signs)
+    }
+
+    fn set_light<'p>(&'p mut self) -> StatementWrapper<'l, 'p> {
+        StatementWrapper(&mut self.set_light)
     }
 }
 

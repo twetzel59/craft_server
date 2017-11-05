@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 use std::thread;
 use client;
 use commands::CommandHandler;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent,
+            LightEvent, SignEvent, TalkEvent};
 use nick::NickManager;
-use world::{Block, Sign, World};
+use world::{Block, Light, Sign, World};
 
 pub const DAY_LENGTH: u32 = 600;
 
@@ -145,6 +146,10 @@ impl EventThread {
                             println!("{:?}", s);
                             self.handle_sign_event(s);
                         }
+                        Event::Light(l) => {
+                            println!("{:?}", l);
+                            self.handle_light_event(l);
+                        }
                     }
                 }
             }
@@ -267,6 +272,17 @@ impl EventThread {
                 }
             }
 
+            if let Some(it) = self.world.lights_in_chunk((ev.p, ev.q)) {
+                for (xyz, w) in it {
+                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32) - 1,
+                               xyz.1 as i32,
+                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
+                    c.broadcast_light((xyz, w), (ev.p, ev.q));
+
+                    redraw = true;
+                }
+            }
+
             if redraw {
                 c.broadcast_redraw((ev.p, ev.q));
             }
@@ -284,6 +300,21 @@ impl EventThread {
         }
 
         self.world.set_sign((ev.x, ev.y, ev.z), chunk, ev.face, Sign(ev.text));
+    }
+
+    fn handle_light_event(&mut self, ev: LightEvent) {
+        use world::chunked;
+
+        let (p, q) = (chunked(ev.x), chunked(ev.z));
+
+        let mut clients = self.clients.lock().unwrap();
+
+        for i in clients.values_mut() {
+            i.send_light(&ev);
+            i.broadcast_redraw((p, q));
+        }
+
+        self.world.set_light((ev.x, ev.y, ev.z), (p, q), Light(ev.w));
     }
 }
 

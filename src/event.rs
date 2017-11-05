@@ -44,6 +44,9 @@ pub enum Event {
 
     /// Represents a sign added on a client.
     Sign(SignEvent),
+
+    /// Represents a light toggled on a client.
+    Light(LightEvent),
 }
 
 /// Describes errors that occur parsing messages.
@@ -286,5 +289,52 @@ impl SignEvent {
 
     fn warn_invalid() {
         println!("Warning: invalid sign packet.");
+    }
+}
+
+/// Corresponds to `L` light messages.
+#[derive(Debug)]
+pub struct LightEvent {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub w: u8,
+}
+
+impl LightEvent {
+    /// Create a new light event information structure from an encoded payload.
+    pub fn new(payload: &str) -> Result<LightEvent, MessageParseError> {
+        let pieces: Vec<&str> = payload.split(|c| c == ',' || c == '\n').collect();
+
+        if pieces.len() != 4 {
+            Self::warn_invalid();
+            return Err(MessageParseError::InvalidLength);
+        }
+
+        match Self::parse_all(&pieces) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                Self::warn_invalid();
+                Err(MessageParseError::IntError(e))
+            },
+        }
+    }
+
+    fn parse_all(pieces: &Vec<&str>) -> Result<LightEvent, ParseIntError> {
+        let x = pieces[0].parse()?;
+        let y = pieces[1].parse()?;
+        let z = pieces[2].parse()?;
+        let w = pieces[3].parse()?;
+
+        Ok(LightEvent {
+            x,
+            y,
+            z,
+            w,
+        })
+    }
+
+    fn warn_invalid() {
+        println!("Warning: invalid light packet.");
     }
 }

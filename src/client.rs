@@ -6,9 +6,10 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 use std::thread;
-use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
+use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent,
+            LightEvent, SignEvent, TalkEvent};
 use server::ServerTime;
-use world::{Block, chunked, Sign};
+use world::{Block, chunked, Light, Sign};
 
 /// A type representing the ID players are given to uniquely identify them on both the client
 /// and the server side.
@@ -117,6 +118,11 @@ impl Client {
         self.broadcast_block(((ev.x, ev.y, ev.z), &Block(ev.w)), (chunked(ev.x), chunked(ev.z)));
     }
 
+    /// Tells the client that a light has changed.
+    pub fn send_light(&mut self, ev: &LightEvent) {
+        self.broadcast_light(((ev.x, ev.y, ev.z), &Light(ev.w)), (chunked(ev.x), chunked(ev.z)));
+    }
+
     /// Notifies the client that another client has left.
     pub fn send_disconnect(&mut self, other_id: Id) {
         let msg = format!("D,{}\n", other_id);
@@ -192,6 +198,17 @@ impl Client {
                           face,
                           sign.0);
         //println!("will send: {}", msg);
+
+        // TODO: What if the stream is now closed? Alert something that client is disconnected.
+        let _ = self.send_stream.write_all(msg.as_bytes());
+    }
+
+    /// Sends a light update to the client.
+    pub fn broadcast_light(&mut self, light: ((i32, i32, i32), &Light), pq: (i32, i32)) {
+        let msg = format!("L,{},{},{},{},{},{}\n",
+                          pq.0, pq.1,
+                          (light.0).0, (light.0).1, (light.0).2,
+                          (light.1).0);
 
         // TODO: What if the stream is now closed? Alert something that client is disconnected.
         let _ = self.send_stream.write_all(msg.as_bytes());
@@ -318,6 +335,8 @@ impl ClientThread {
             self.handle_chunk(payload);
         } else if msg.starts_with('S') {
             self.handle_sign(payload);
+        } else if msg.starts_with('L') {
+            self.handle_light(payload);
         }
     }
 
@@ -348,6 +367,12 @@ impl ClientThread {
     fn handle_sign(&self, payload: &str) {
         if let Ok(ev) = SignEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Sign(ev) }).unwrap();
+        }
+    }
+
+    fn handle_light(&self, payload: &str) {
+        if let Ok(ev) = LightEvent::new(payload) {
+            self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Light(ev) }).unwrap();
         }
     }
 }
