@@ -1,3 +1,5 @@
+//! `craft_server` is an alternate server for Craft.
+
 extern crate sqlite;
 
 pub use server::Server;

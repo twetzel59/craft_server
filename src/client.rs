@@ -2,10 +2,8 @@
 //! a client.
 
 use std::collections::HashMap;
-//use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
-//use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::mpsc::Sender;
 use std::thread;
 use event::{BlockEvent, ChunkRequestEvent, Event, IdEvent, PositionEvent, SignEvent, TalkEvent};
@@ -19,12 +17,8 @@ pub type Id = u32;
 /// The concrete represntation of a network client.
 pub struct Client {
     send_stream: TcpStream,
-    //queue: VecDeque<u8>,
-    //id: Id,
     addr: IpAddr,
     nick: String,
-    //thread_death: Receiver<()>,
-    //alive: bool,
     position: (f32, f32, f32, f32, f32),
 }
 
@@ -44,31 +38,17 @@ impl Client {
         let mut version_buf: [u8; 4] = [0; 4];
         stream.read_exact(&mut version_buf).unwrap();
 
-        /*
-        let addr_str = match stream.peer_addr() {
-            Ok(addr) => addr.to_string(),
-            Err(_) => "<unknown addr>".to_string(),
-        };
-        */
-
         let addr = stream.peer_addr().unwrap();
 
         if version_buf == [b'V', b',', b'1', b'\n'] {
             println!("{:?} joined.", addr.to_string());
 
-            //let (death_notifier, thread_death) = mpsc::channel();
-
-            //ClientThread::run(stream, addr, tx, id, &nick, death_notifier);
             ClientThread::run(stream, addr, tx, id, &nick, daytime, other_clients);
 
             let c = Client {
                 send_stream,
-                //queue: VecDeque::new(),
-                //id,
                 addr: addr.ip(),
                 nick,
-                //thread_death,
-                //alive: true,
                 position: (0., 0., 0., 0., 0.),
             };
 
@@ -79,13 +59,6 @@ impl Client {
             return Err(());
         }
     }
-
-    /*
-    /// Returns the ID of this client.
-    pub fn id(&self) -> Id {
-        self.id
-    }
-    */
 
     /// Returns this client's nickname.
     pub fn nick(&self) -> &str {
@@ -112,31 +85,6 @@ impl Client {
     pub fn set_position(&mut self, position: (f32, f32, f32, f32, f32)) {
         self.position = position;
     }
-
-    /*
-    /// Determine if the client is alive.
-    /// # Note
-    /// The `self` reference is mutable here, because the object state will save
-    /// the last check to avoid checking the client thread for its status again.
-    pub fn alive(&mut self) -> bool {
-        if self.alive {
-            // If the player left, the client thread will have died
-            // since the object state was updated!
-
-            match self.thread_death.try_recv() {
-                Ok(()) => self.alive = false,
-                Err(e) => match e {
-                    TryRecvError::Disconnected => self.alive = false,
-                    _ => {},
-                },
-            };
-
-            self.alive
-        } else {
-            false
-        }
-    }
-    */
 
     /// Sends another client's position.
     pub fn send_position(&mut self, other_id: Id, ev: &PositionEvent) {
@@ -255,7 +203,6 @@ struct ClientThread {
     addr: SocketAddr,
     tx: Sender<IdEvent>,
     id: Id,
-    //death_notifier: Sender<()>,
 }
 
 impl ClientThread {
@@ -266,14 +213,11 @@ impl ClientThread {
            nick: &str,
            daytime: ServerTime,
            other_clients: &mut HashMap<Id, Client>) {
-           //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
-           //death_notifier: Sender<()>) {
         let mut c = ClientThread {
             stream,
             addr,
             tx,
             id,
-            //death_notifier,
         };
 
         c.send_first_messages(nick, daytime, other_clients);
@@ -304,7 +248,6 @@ impl ClientThread {
             }
 
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Disconnected }).unwrap();
-            //self.death_notifier.send(()).unwrap();
 
             println!("A client left.");
         });
@@ -314,7 +257,6 @@ impl ClientThread {
                           nick: &str,
                           daytime: ServerTime,
                           other_clients: &mut HashMap<Id, Client>) {
-                          //all_positions: &Vec<(Id, (f32, f32, f32, f32, f32))>) {
         use server::DAY_LENGTH;
 
         let id = self.id.to_string();
@@ -380,10 +322,6 @@ impl ClientThread {
     }
 
     fn handle_position(&self, payload: &str) {
-        //println!("client {} payload: {}", self.id, payload);
-
-        //println!("{:?}", PositionEvent::new(payload));
-
         if let Ok(ev) = PositionEvent::new(payload) {
             self.tx.send(IdEvent { id: self.id, peer: self.addr, event: Event::Position(ev) }).unwrap();
         }

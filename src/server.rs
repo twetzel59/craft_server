@@ -56,7 +56,6 @@ impl Server {
                          self.world,
                          self.nicks.clone());
 
-        //let mut all_positions = Vec::new();
         for i in self.listener.incoming() {
             let stream = i.unwrap();
 
@@ -75,12 +74,6 @@ impl Server {
 
             let mut clients = self.clients.lock().unwrap();
 
-            //all_positions.clear();
-            //for i in clients.iter() {
-            //    all_positions.push((*i.0, i.1.position()));
-            //}
-            //println!("all_positions: {:?}", all_positions);
-
             if let Ok(c) = client::Client::run(stream,
                                                self.channel.0.clone(),
                                                id,
@@ -89,10 +82,6 @@ impl Server {
                                                &mut clients) {
                 clients.insert(id, c);
             }
-
-            //for x in clients {
-            //    println!("client {}: {}", x.id(), x.alive());
-            //}
         }
     }
 }
@@ -102,7 +91,6 @@ struct EventThread {
     clients: Arc<Mutex<HashMap<client::Id, client::Client>>>,
     disconnects: mpsc::Sender<client::Id>,
     world: World,
-    //nicks: Arc<Mutex<NickManager>>,
     command: CommandHandler,
 }
 
@@ -119,7 +107,6 @@ impl EventThread {
             clients,
             disconnects,
             world,
-            //nicks,
             command,
         };
 
@@ -130,12 +117,6 @@ impl EventThread {
         thread::spawn(move || {
             loop {
                 if let Ok(ev) = self.rx.recv() {
-                    //println!("{:?}", ev);
-
-                    //for c in self.clients.lock().unwrap().iter() {
-                    //    println!("{:?}", c.id());
-                    //}
-
                     match ev.event {
                         Event::Disconnected => {
                             self.handle_disconnect_event(ev.id);
