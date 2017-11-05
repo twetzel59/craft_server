@@ -23,7 +23,16 @@ pub const INITIAL: &str =
     CREATE INDEX IF NOT EXISTS sign_pq_idx ON \
     sign (p, q); \
     CREATE UNIQUE INDEX IF NOT EXISTS sign_xyzface_idx ON \
-    sign (x, y, z, face);"
+    sign (x, y, z, face); \
+    CREATE TABLE IF NOT EXISTS sign (\
+    p INT NOT NULL, \
+    q INT NOT NULL, \
+    x INT NOT NULL, \
+    y INT NOT NULL, \
+    z INT NOT NULL, \
+    w INT NOT NULL); \
+    CREATE UNIQUE INDEX IF NOT EXISTS light_pqxyz_idx ON \
+    light (p, q, x, y, z);"
 ;
 
 /// Loads blocks from the database.
@@ -51,12 +60,9 @@ pub const DELETE_INDIVIDUAL_SIGN: &str = "DELETE FROM sign WHERE x = ? and y = ?
 /* pub const DELETE_SIGN: &str = "DELETE FROM sign WHERE "; */
 pub const DELETE_SIGNS: &str = "DELETE FROM sign WHERE x = ? AND y = ? AND z = ?";
 
-/*
-// Needed for vanilla Craft, even though signs
-// are not yet implemented for this server.
-/// Removes signs from a block.
-pub const REMOVE_SIGN: &str = "";
+/// Loads lights from the database.
+pub const LOAD_LIGHTS: &str = "SELECT p, q, x, y, z, w FROM light;";
 
-/// Commit the database transactions.
+/* /// Commit the database transactions.
 pub const COMMIT: &str = "COMMIT;";
 */

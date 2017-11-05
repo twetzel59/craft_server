@@ -29,12 +29,17 @@ impl Block {
 #[derive(Clone, Debug)]
 pub struct Sign(pub String);
 
+/// Type of Craft lights.
+#[derive(Clone, Debug)]
+pub struct Light(pub u8);
+
 /* /// A structure representing a sector of the world.
 pub */
 #[derive(Debug)]
 struct Chunk {
     blocks: HashMap<(u8, u8, u8), Block>,
     signs: HashMap<(i32, i32, i32, u8), Sign>,
+    lights: HashMap<(u8, u8, u8), Light>,
 }
 
 impl Chunk {
@@ -42,6 +47,7 @@ impl Chunk {
         Chunk {
             blocks: HashMap::new(),
             signs: HashMap::new(),
+            lights: HashMap::new(),
         }
     }
 
@@ -55,8 +61,16 @@ impl Chunk {
         self.signs.insert(key, sign);
     }
 
+    fn set_light(&mut self, local_pos: (u8, u8, u8), light: Light) {
+        self.lights.insert(local_pos, light);
+    }
+
     fn signs(&self) -> hash_map::Iter<(i32, i32, i32, u8), Sign> {
         self.signs.iter()
+    }
+
+    fn lights(&self) -> hash_map::Iter<(u8, u8, u8), Light> {
+        self.lights.iter()
     }
 }
 
@@ -127,6 +141,16 @@ impl ChunkManager {
         //println!("all blocks and signs: {:?}", self.chunks);
     }
 
+    fn set_light(&mut self, global_pos: (i32, i32, i32), pq: (i32, i32), light: Light) {
+        let local_pos = ((global_pos.0 - pq.0 * CHUNK_SIZE as i32 + 1) as u8,
+                          global_pos.1 as u8,
+                         (global_pos.2 - pq.1 * CHUNK_SIZE as i32 + 1) as u8);
+
+        let entry = self.chunks.entry(pq);
+        let chunk = entry.or_insert(Chunk::new());
+        chunk.set_light(local_pos, light);
+    }
+
     fn get(&self, pq: (i32, i32)) -> Option<&Chunk> {
         self.chunks.get(&pq)
     }
@@ -158,6 +182,7 @@ impl World {
         w.initial_queries(&conn);
         w.load_blocks(&conn);
         w.load_signs(&conn);
+        w.load_lights(&conn);
 
         println!("OK");
 
@@ -203,6 +228,14 @@ impl World {
         }
     }
 
+    /// Iterate over the lights in the chunk with these coordinates.
+    pub fn lights_in_chunk(&self, chunk: (i32, i32)) -> Option<hash_map::Iter<(u8, u8, u8), Light>> {
+        match self.chunk_mgr.get(chunk) {
+            Some(c) => Some(c.lights()),
+            None => None,
+        }
+    }
+
     fn initial_queries(&self, conn: &Connection) {
         conn.execute(queries::INITIAL).unwrap();
     }
@@ -236,6 +269,21 @@ impl World {
                                           record[6].as_string().unwrap().to_string());
 
             self.chunk_mgr.set_sign(xyz, pq, face, Sign(text));
+        }
+    }
+
+    fn load_lights(&mut self, conn: &Connection) {
+        let mut cursor = conn.prepare(queries::LOAD_LIGHTS).unwrap().cursor();
+
+        while let Some(record) = cursor.next().unwrap() {
+            let (pq, xyz, w) = ((record[0].as_integer().unwrap() as i32,
+                                 record[1].as_integer().unwrap() as i32),
+                                (record[2].as_integer().unwrap() as i32,
+                                 record[3].as_integer().unwrap() as i32,
+                                 record[4].as_integer().unwrap() as i32),
+                                 record[5].as_integer().unwrap() as u8);
+
+            self.chunk_mgr.set_light(xyz, pq, Light(w));
         }
     }
 }

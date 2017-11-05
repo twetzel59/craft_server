@@ -267,6 +267,17 @@ impl EventThread {
                 }
             }
 
+            if let Some(it) = self.world.lights_in_chunk((ev.p, ev.q)) {
+                for (xyz, w) in it {
+                    let xyz = (xyz.0 as i32 + (ev.p * CHUNK_SIZE as i32) - 1,
+                               xyz.1 as i32,
+                               xyz.2 as i32 + (ev.q * CHUNK_SIZE as i32) - 1);
+                    c.broadcast_light((xyz, w), (ev.p, ev.q));
+
+                    redraw = true;
+                }
+            }
+
             if redraw {
                 c.broadcast_redraw((ev.p, ev.q));
             }
