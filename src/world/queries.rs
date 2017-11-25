@@ -24,7 +24,7 @@ pub const INITIAL: &str =
     sign (p, q); \
     CREATE UNIQUE INDEX IF NOT EXISTS sign_xyzface_idx ON \
     sign (x, y, z, face); \
-    CREATE TABLE IF NOT EXISTS sign (\
+    CREATE TABLE IF NOT EXISTS light (\
     p INT NOT NULL, \
     q INT NOT NULL, \
     x INT NOT NULL, \
